@@ -2,6 +2,8 @@
 
 Fork of [RunningOverGlowies/MOSS-BBox-Editor](https://github.com/RunningOverGlowies/MOSS-BBox-Editor). Refer to the original README for basic usage instructions.
 
+Modified to work as stand-alone dataset manager. Meant for manual updating of old datasets to MOSS-image layout.
+
 ## New features
 
 - **Local Python server** (`server.py`) that gives the editor read/write access to files on disk.
