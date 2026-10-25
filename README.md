@@ -18,4 +18,4 @@ Modified to work as stand-alone dataset manager. Meant for manual updating of ol
 
 ## Usage
 
-Run `run.bat` (or `pip install flask pillow` then `python server.py`) and open the printed link, `http://127.0.0.1:5000` by default.
+Run `run.bat` (or `pip install flask pillow` then `python server.py`) and open the printed link, `http://127.0.0.1:5012` by default.
