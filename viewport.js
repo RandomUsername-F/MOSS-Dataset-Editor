@@ -79,6 +79,16 @@ function setupViewport() {
     zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? zoom * 1.12 : zoom / 1.12);
   }, { passive: false });
 
+  // Middle / right button always pans the canvas and never reaches the boxes or handles (capture phase)
+  viewport.addEventListener('mousedown', e => {
+    if (e.button === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isPanning = true;
+    startPan = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  }, true);
+  viewport.addEventListener('contextmenu', e => e.preventDefault());
+
   viewport.addEventListener('mousedown', e => {
     const onBackground = e.target === viewport || e.target === canvas || e.target.id === 'canvas-backdrop-image';
     if (e.shiftKey && onBackground) { // Shift + drag = marquee multi-select

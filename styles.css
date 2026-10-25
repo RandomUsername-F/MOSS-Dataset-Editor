@@ -154,3 +154,17 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 .toast.warn { border-color: #f59e0b; color: #f59e0b; }
 .toast.info { border-color: var(--border-focus); color: var(--border-focus); }
 @keyframes toast-in { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* ---- Dataset sidebar & caption tab ---- */
+.btn input { margin: 0; }
+.ds-sidebar { width: 10vw; min-width: 150px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.ds-head { padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 0.65rem; font-family: var(--font-mono); color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
+.ds-warn { color: var(--color-locked); }
+.ds-list { flex: 1; overflow-y: auto; position: relative; }
+#ds-spacer { width: 1px; }
+.ds-row { position: absolute; left: 0; right: 0; height: 44px; display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 6px; padding: 0 6px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 0.68rem; }
+.ds-row:hover, .ds-row.active { background: var(--bg-card-hover); }
+.ds-row.active { box-shadow: inset 3px 0 0 var(--border-focus); }
+.ds-row img { width: 40px; height: 36px; object-fit: cover; border-radius: 3px; background: var(--bg-input); }
+.ds-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#txt-caption { flex: 1; resize: none; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-family: var(--font-mono); font-size: 0.78rem; }

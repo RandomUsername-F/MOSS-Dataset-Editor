@@ -1,64 +1,19 @@
-# [USE IT NOW](https://runningoverglowies.github.io/MOSS-BBox-Editor/index.html)
+# MOSS-Dataset-Editor
 
-# MOSS-BBox-Editor
-> **Bounding-Box Prompting Studio**
+Fork of [RunningOverGlowies/MOSS-BBox-Editor](https://github.com/RunningOverGlowies/MOSS-BBox-Editor). Refer to the original README for basic usage instructions.
 
+## New features
 
-A html+js canvas tool for editing and reverse-engineering **MOSS-Image** bounding-box prompts. Drag-in images generated with ComfyUI into the browser window, json prompt is extracted and image shows directly on the canvas.
-No dependencies, browser saves prefs. 
+- **Local Python server** (`server.py`) that gives the editor read/write access to files on disk.
+- **Load Dataset** button opens a native folder picker. The **Load subfolders** checkbox includes images in subfolders.
+- **Dataset sidebar** (left) lists images with thumbnails and names. It is virtualized and lazy-loaded for large datasets.
+- **Image selection** sets the canvas to the exact image dimensions and warns if they are not multiples of 16.
+- **Per-image JSON autosave:** the sibling `.json` is loaded, or created if missing, and every change is saved immediately.
+- **Text caption tab** shows the sibling `.txt` of the selected image (read-only).
+- **Duplicate button (⧉)** on each box card clones the box.
+- **Mouse controls:** only the left button moves boxes. Middle and right buttons drag the canvas.
+- **`run.bat`** installs missing dependencies and starts the server. The port can be changed inside the file.
 
-* **Drop-in ComfyUI workflow**
-* **Palette with auto-color naming**
-* **Easy tagging and ordering**
-* **Lock/hide elements**
-* **Realtime 2-way JSON editor**
+## Usage
 
-<img width="1368" height="972" alt="firefox_Qs9XH02d3H" src="https://github.com/user-attachments/assets/f25a069d-e7a2-4703-93ed-1ee461d0e2a4" />
-
-
----
-
-## Controls
-
-| Action | Shortcut / Gesture |
-| :--- | :--- |
-| **Marquee Multi-Select** | `Shift` + Click & drag on empty canvas |
-| **Multi-Select / Toggle** | `Ctrl` / `Cmd` + Click boxes or sidebar cards |
-| **Move Group** | Click & drag any selected box |
-| **Proportional Scale** | `Shift` + Drag any resize handle |
-| **Freeform Resize** | Drag any of the 8 resize handles |
-| **Pan Canvas** | Middle-click + drag **or** drag empty canvas |
-| **Zoom In / Out** | Mouse Wheel |
-| **Delete Selected** | `Delete` or `Backspace` |
-| **Undo / Redo** | `Ctrl+Z` / `Ctrl+Y` (or `Cmd+Z` / `Cmd+Shift+Z`) |
-| **Import Image / Schema** | Drag & drop file onto page |
-
----
-
-## MOSS-Image Prompt Schema
-
-The editor builds and validates against this structure:
-
-```json
-{
-  "width": <integer, multiple of 16>,
-  "height": <integer, multiple of 16>,
-  "bbox_coord_space": "abs",
-  "bbox_format": "xyxy",
-  "summary": {
-    "canvas": "single" | "multi_panel" | "collage",
-    "meta": ["<medium/genre tag>", "<artistic style tag>", "..."],
-    "palette": ["<primary color / hex / mood>", "..."],
-    "caption": "<Comprehensive visual description of the complete scene, setting, atmosphere, camera, lighting, and overarching composition.>"
-  },
-  "items": [
-    {
-      "label": "character" | "object" | "text",
-      "caption": "<Detailed description of this item's specific appearance, posture, material, lighting, or typographical styling.>",
-      "bbox": [x_min, y_min, x_max, y_max],
-      "text": "<Required only if label is 'text'. Literal rendered text with explicit \\n for line breaks.>",
-      "tags": ["<descriptive tag>", "..."]
-    }
-  ]
-}
-```
+Run `run.bat` (or `pip install flask pillow` then `python server.py`) and open the printed link, `http://127.0.0.1:5000` by default.

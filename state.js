@@ -66,7 +66,7 @@ function restoreSnapshot(str) {
 }
 
 function enforceSchemaIntegrity() {
-  const snap16 = v => Math.max(256, Math.round((Number(v) || 1024) / 16) * 16);
+  const snap16 = v => ds.exactDims ? Math.max(1, Math.round(Number(v) || 1024)) : Math.max(256, Math.round((Number(v) || 1024) / 16) * 16);
   sceneData.width = snap16(sceneData.width);
   sceneData.height = snap16(sceneData.height);
   sceneData.bbox_coord_space = 'abs';
@@ -131,7 +131,7 @@ function updateUndoRedoButtons() {
   $('btn-redo').disabled = !redoStack.length;
 }
 
-const autoSave = () => lsSet('spatial_bbox_studio_save', createSnapshot());
+const autoSave = () => (ds.active ? datasetSaveSoon() : lsSet('spatial_bbox_studio_save', createSnapshot()));
 
 function syncAll() {
   enforceSchemaIntegrity();

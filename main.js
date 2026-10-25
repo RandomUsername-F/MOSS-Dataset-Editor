@@ -69,7 +69,7 @@ function clearCanvasAndWorkflow() {
 
 /* ---- Tabs, keyboard ---- */
 function switchTab(tab) {
-  ['items', 'json'].forEach((t, i) => {
+  ['items', 'json', 'txt'].forEach((t, i) => {
     $(`tab-${t}`).style.display = t === tab ? 'flex' : 'none';
     document.querySelectorAll('.tab-btn')[i].classList.toggle('active', t === tab);
   });

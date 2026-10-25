@@ -122,6 +122,7 @@ function renderSidebarList() {
     const dragHandle = `<span class="card-drag-handle${locked ? ' is-locked' : ''}" title="${locked ? 'Element is locked from reordering' : 'Drag to reorder elements'}" draggable="${!locked}" onclick="event.stopPropagation()">⠿</span>`;
     const actions = showBbox => `<div class="card-actions" onclick="event.stopPropagation()">
         ${showBbox ? `<span class="bbox-readout">[${item.bbox.join(',')}]</span>` : ''}
+        <button class="action-btn" title="Duplicate" onclick="duplicateItem(${idx})">⧉</button>
         <button class="action-btn" title="Toggle Hide" onclick="toggleItemVisibility(${idx})">${item.hidden ? '🚫' : '👁'}</button>
         <button class="action-btn" title="${locked ? 'Unlock Element' : 'Lock Element'}" onclick="toggleItemLock(${idx})">${locked ? '🔒' : '🔓'}</button>
         <button class="action-btn" title="Delete" onclick="deleteItem(${idx})" ${locked ? 'disabled' : ''}>🗑️</button>

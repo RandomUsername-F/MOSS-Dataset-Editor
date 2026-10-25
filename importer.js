@@ -157,6 +157,7 @@ function applyLoadedSchema(schema) {
 
 async function processFile(file) {
   if (!file) return;
+  if (ds.active && !(await leaveDataset())) return;
   const buf = await readFile(file, 'readAsArrayBuffer'), u8 = new Uint8Array(buf);
   const isPng = u8.length >= 8 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47;
 

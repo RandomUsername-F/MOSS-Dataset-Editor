@@ -109,10 +109,23 @@ function handleItemDrag(e) {
 function addNewItem() {
   recordState();
   const { width: W, height: H } = sceneData;
-  const item = { label: 'object', caption: 'New bounding box item.', bbox: [Math.round(W * 0.3), Math.round(H * 0.3), Math.round(W * 0.7), Math.round(H * 0.7)], tags: [] };
+  const item = { label: 'object', caption: '', bbox: [Math.round(W * 0.3), Math.round(H * 0.3), Math.round(W * 0.7), Math.round(H * 0.7)], tags: [] };
   attachEditorProperties(item);
   sceneData.items.push(item);
   selectItem(sceneData.items.length - 1);
+}
+
+function duplicateItem(idx) {
+  const src = sceneData.items[idx];
+  if (!src) return;
+  recordState();
+  const copy = clone(src), [x1, y1, x2, y2] = copy.bbox;
+  const dx = Math.min(16, Math.max(0, sceneData.width - x2)) || -Math.min(16, x1);
+  const dy = Math.min(16, Math.max(0, sceneData.height - y2)) || -Math.min(16, y1);
+  copy.bbox = [x1 + dx, y1 + dy, x2 + dx, y2 + dy];
+  attachEditorProperties(copy);
+  sceneData.items.splice(idx + 1, 0, copy);
+  selectItem(idx + 1);
 }
 
 function changeItemLabel(idx, newLabel) {
