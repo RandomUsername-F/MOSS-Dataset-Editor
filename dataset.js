@@ -1,6 +1,6 @@
 /* Dataset mode: folder loading through server.py, virtualised image list, per-image JSON autosave. */
 
-const ds = { active: false, count: 0, version: 0, index: -1, token: 0, items: new Map(), chunks: new Set(),
+const ds = { active: false, count: 0, version: 0, index: -1, token: 0, bust: new Map(), items: new Map(), chunks: new Set(),
   loading: false, readOnly: false, exactDims: false, lastSaved: '', pending: null, timer: null, saving: Promise.resolve() };
 const DS_ROW = 44, DS_CHUNK = 200;
 const dsRows = new Map();
@@ -29,8 +29,11 @@ async function loadDataset() {
     if (info.truncated) showToast(`⚠️ Scan capped at ${info.count} images.`, 'warn');
     dsRows.forEach(el => el.remove());
     dsRows.clear();
-    Object.assign(ds, { active: true, count: info.count, version: info.version, index: -1, items: new Map(), chunks: new Set(), pending: null });
+    Object.assign(ds, { active: true, count: info.count, version: info.version, index: -1, bust: new Map(), items: new Map(), chunks: new Set(), pending: null });
     $('ds-sidebar').style.display = 'flex';
+    $('ds-apply-meta').style.display = '';
+    $('ds-copy-txt').style.display = '';
+    $('ds-crop-btn').style.display = '';
     $('ds-info').textContent = `${info.count} images`;
     $('ds-list').scrollTop = 0;
     dsStatus('');
@@ -44,6 +47,10 @@ async function leaveDataset() {
   await flushSave();
   Object.assign(ds, { active: false, exactDims: false, index: -1 });
   $('ds-sidebar').style.display = 'none';
+  $('ds-apply-meta').style.display = 'none';
+  $('ds-copy-txt').style.display = 'none';
+  $('ds-crop-btn').style.display = 'none';
+  cancelCrop();
   $('txt-caption').value = '';
   return true;
 }
@@ -74,7 +81,7 @@ function dsRender() {
     if (!it) { dsFetch(Math.floor(i / DS_CHUNK)); continue; }
     const el = Object.assign(document.createElement('div'), { className: `ds-row${i === ds.index ? ' active' : ''}` });
     el.style.top = `${i * DS_ROW}px`;
-    el.innerHTML = `<img loading="lazy" alt="" src="/api/thumb?${dsQuery(i)}"><span title="${escapeHtml(it.rel)}">${escapeHtml(it.name)}</span>`;
+    el.innerHTML = `<img loading="lazy" alt="" src="/api/thumb?${dsQuery(i)}&t=${ds.bust.get(i) || 0}"><span title="${escapeHtml(it.rel)}">${escapeHtml(it.name)}</span>`;
     el.onclick = () => selectDatasetImage(i);
     box.appendChild(el);
     dsRows.set(i, el);
@@ -83,16 +90,23 @@ function dsRender() {
 $('ds-list').addEventListener('scroll', () => requestAnimationFrame(dsRender));
 window.addEventListener('resize', () => requestAnimationFrame(dsRender));
 
+function dsWarnDims(W, H, toast = false) {
+  const bad = W % 16 || H % 16;
+  $('ds-warn').textContent = bad ? `⚠ ${W}×${H} is not a multiple of 16` : '';
+  if (bad && toast) showToast(`⚠️ Image is ${W}×${H}: dimensions are not multiples of 16.`, 'warn');
+}
+
 /* ---- Selecting an image ---- */
 async function selectDatasetImage(i) {
   if (!ds.active || i < 0 || i >= ds.count || i === ds.index) return;
   await flushSave();
+  cancelCrop();
   const token = ++ds.token;
   ds.loading = true;
   ds.index = i;
   dsRows.forEach((el, k) => el.classList.toggle('active', k === i));
   try {
-    const url = `/api/image?${dsQuery(i)}`;
+    const url = `/api/image?${dsQuery(i)}&t=${ds.bust.get(i) || 0}`; // t defeats the browser's in-page image cache after a crop
     const [side, img] = await Promise.all([
       api(`/api/sidecar?${dsQuery(i)}`),
       new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Image failed to load')); im.src = url; })
@@ -119,15 +133,49 @@ async function selectDatasetImage(i) {
     fitToViewport();
     $('txt-caption').value = side.txt ?? '';
 
-    const bad = W % 16 || H % 16;
-    $('ds-warn').textContent = bad ? `⚠ ${W}×${H} is not a multiple of 16` : '';
-    if (bad) showToast(`⚠️ Image is ${W}×${H}: dimensions are not multiples of 16.`, 'warn');
+    dsWarnDims(W, H, true);
     ds.lastSaved = side.exists ? JSON.stringify(sceneData, null, 2) : '';
     dsStatus(side.exists ? '' : '+ new JSON');
   } catch (e) { showToast('⚠️ ' + e.message, 'warn'); }
   finally {
     if (token === ds.token) { ds.loading = false; datasetSaveSoon(); } // creates the .json if missing
   }
+}
+
+/* ---- Page Up / Page Down: previous / next image ---- */
+window.addEventListener('keydown', e => {
+  if (!ds.active || (e.key !== 'PageUp' && e.key !== 'PageDown')) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  e.preventDefault();
+  const i = ds.index + (e.key === 'PageDown' ? 1 : -1);
+  if (i < 0 || i >= ds.count) return;
+  selectDatasetImage(i);
+  const box = $('ds-list'), top = i * DS_ROW; // keep the selected row visible
+  if (top < box.scrollTop) box.scrollTop = top;
+  else if (top + DS_ROW > box.scrollTop + box.clientHeight) box.scrollTop = top + DS_ROW - box.clientHeight;
+});
+
+/* ---- Text caption -> summary.caption ---- */
+function copyTxtToSummary() {
+  const text = $('txt-caption').value.trim();
+  if (!text) return showToast('⚠️ No .txt caption to copy.', 'warn');
+  $('sum-caption').value = text;
+  updateSummaryField('caption', text);
+  showToast('✅ Caption copied to summary.', 'info');
+}
+
+/* ---- Dataset-wide summary.meta ---- */
+async function applyMetaToDataset() {
+  if (!ds.active) return;
+  const meta = clone(sceneData.summary.meta || []);
+  if (!confirm(`Set summary.meta to [${meta.join(', ') || 'empty'}] on all ${ds.count} images?\nExisting meta in every JSON is overwritten; missing JSONs are created.`)) return;
+  try {
+    await flushSave();
+    showToast('Applying meta to dataset…', 'info');
+    const r = await api('/api/apply-meta', jsonOpts('POST', JSON.stringify({ v: ds.version, meta })));
+    ds.lastSaved = JSON.stringify(sceneData, null, 2);
+    showToast(`✅ Meta applied: ${r.updated} updated, ${r.created} created, ${r.skipped} skipped.`, 'info');
+  } catch (e) { showToast('⚠️ ' + e.message, 'warn'); }
 }
 
 /* ---- Autosave (debounced; flushed before switching images) ---- */

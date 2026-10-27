@@ -2,7 +2,7 @@
 Setup: pip install flask pillow   (pillow is optional, used for cached thumbnails)
 Run:   python server.py [--port 5000]
 """
-import argparse, atexit, hashlib, json, logging, os, re, shutil, signal, subprocess, sys, threading
+import argparse, atexit, hashlib, json, logging, os, re, shutil, signal, subprocess, sys, threading, time
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -86,7 +86,7 @@ def load_dataset():
         return jsonify(error='Folder not found'), 400
     files, truncated = scan(root, bool(j.get('recursive')))
     with lock:
-        D.update(root=root, files=files, version=D['version'] + 1)
+        D.update(root=root, files=files, version=time.time_ns() // 1_000_000)  # unique per load, even across restarts
         version = D['version']
     return jsonify(count=len(files), truncated=truncated, version=version, root=root)
 
@@ -120,7 +120,7 @@ def thumb():
                 t.thumbnail((96, 96))
                 t.save(tmp, 'JPEG', quality=80)
             os.replace(tmp, out)
-        return send_file(out, max_age=86400)
+        return send_file(out, max_age=0)
     except Exception:
         return send_file(p)  # Pillow missing or unreadable image: serve the original
 
@@ -162,6 +162,96 @@ def save_json():
         f.write(raw)
     os.replace(tmp, path)
     return jsonify(ok=True)
+
+
+@app.post('/api/crop')
+def crop_image():
+    p = resolve()
+    j = request.get_json(silent=True) or {}
+    try:
+        x, y, w, h = (int(j[k]) for k in 'xywh')
+    except (KeyError, TypeError, ValueError):
+        abort(400)
+    if os.path.splitext(p)[1].lower() == '.gif':
+        return jsonify(error='GIF cropping is not supported'), 400
+    tmp = p + '.crop.tmp'
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(p) as im:
+            fmt = 'JPEG' if im.format == 'MPO' else im.format
+            icc = im.info.get('icc_profile')
+            im.load()
+            img = ImageOps.exif_transpose(im)  # same orientation the browser displays
+            W, H = img.size
+            if not (w >= 1 and h >= 1 and x >= 0 and y >= 0 and x + w <= W and y + h <= H):
+                return jsonify(error='Crop frame is outside the image'), 400
+            out = img.crop((x, y, x + w, y + h))
+            kw = {'icc_profile': icc} if icc else {}
+            if fmt == 'JPEG':
+                kw.update(quality=100, subsampling=0)
+            elif fmt == 'WEBP':
+                kw.update(lossless=True, quality=100, exact=True)
+            if j.get('backup', True):
+                root = D['root']
+                bak = os.path.join(root, '.crop_backup', os.path.relpath(p, root))
+                if not os.path.exists(bak):  # keep only the very first original
+                    os.makedirs(os.path.dirname(bak), exist_ok=True)
+                    shutil.copy2(p, bak)
+            out.save(tmp, format=fmt, **kw)
+        os.replace(tmp, p)
+    except ImportError:
+        return jsonify(error='Pillow is required for cropping (pip install pillow)'), 500
+    except Exception as e:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return jsonify(error=f'Crop failed: {e}'), 500
+    return jsonify(ok=True, width=w, height=h)
+
+
+def write_json(path, obj):
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(obj, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+@app.post('/api/apply-meta')
+def apply_meta():
+    j = request.get_json(silent=True) or {}
+    meta = j.get('meta')
+    if not isinstance(meta, list) or not all(isinstance(m, str) for m in meta):
+        abort(400)
+    with lock:
+        files, root, ver = D['files'], D['root'], D['version']
+    if j.get('v') != ver:
+        abort(404)
+    n = {'updated': 0, 'created': 0, 'skipped': 0}
+    for f in files:
+        img = os.path.join(root, f)
+        path = os.path.splitext(img)[0] + '.json'
+        try:
+            if os.path.exists(path):
+                with open(path, encoding='utf-8-sig') as fh:
+                    obj = json.load(fh)
+                if not isinstance(obj, dict) or not isinstance(obj.get('items'), list):
+                    n['skipped'] += 1  # not a MOSS schema: left untouched
+                    continue
+                key = 'updated'
+            else:
+                from PIL import Image  # needed for the dimensions of new JSONs
+                with Image.open(img) as im:
+                    w, h = im.size
+                obj = {'width': w, 'height': h, 'bbox_coord_space': 'abs', 'bbox_format': 'xyxy',
+                       'summary': {'canvas': 'single', 'meta': [], 'palette': [], 'caption': ''}, 'items': []}
+                key = 'created'
+            if not isinstance(obj.get('summary'), dict):
+                obj['summary'] = {}
+            obj['summary']['meta'] = meta
+            write_json(path, obj)
+            n[key] += 1
+        except Exception:
+            n['skipped'] += 1
+    return jsonify(n)
 
 
 def clear_thumbs():

@@ -78,6 +78,7 @@
     <div class="toolbar-group">
       <button class="btn btn-icon" id="btn-undo" title="Undo (Ctrl+Z)" onclick="undo()">↶</button>
       <button class="btn btn-icon" id="btn-redo" title="Redo (Ctrl+Y)" onclick="redo()">↷</button>
+      <button class="btn" id="ds-crop-btn" style="display:none;" title="Crop the current image (overwrites the file)" onclick="startCrop()">✂️ Crop</button>
     </div>
 
     <div class="toolbar-group">
@@ -90,6 +91,21 @@
       <button class="btn" style="background:#10b981; border-color:#059669; color:#fff;" onclick="copyFinalJson()">📋 Copy Final JSON</button>
     </div>
   </header>
+
+  <div class="crop-bar" id="crop-bar" style="display:none;">
+    <strong>✂️ Crop</strong>
+    <span>X <input id="crop-x" type="number" min="0" onchange="cropFromInputs()"></span>
+    <span>Y <input id="crop-y" type="number" min="0" onchange="cropFromInputs()"></span>
+    <span>W <input id="crop-w" type="number" min="16" onchange="cropFromInputs()"></span>
+    <span>H <input id="crop-h" type="number" min="16" onchange="cropFromInputs()"></span>
+    <span id="crop-info"></span>
+    <span class="crop-note">Overwrites the image, boxes are shifted.</span>
+    <label title="Keep the first original in .crop_backup before overwriting"><input type="checkbox" id="crop-backup" checked> Backup original</label>
+    <button class="btn" id="crop-mode-manual" onclick="setCropMode('manual')">Manual</button>
+    <button class="btn" id="crop-mode-auto" title="Crop down to the nearest multiple of 16" onclick="setCropMode('auto')">Auto (÷16)</button>
+    <button class="btn" style="background:#10b981; color:#fff;" onclick="confirmCrop()">✔ Confirm crop</button>
+    <button class="btn" onclick="cancelCrop()">✕ Cancel</button>
+  </div>
 
   <div class="workspace">
     <aside class="ds-sidebar" id="ds-sidebar" style="display:none;">
@@ -137,11 +153,11 @@
               </select>
             </div>
             <div class="form-group">
-              <label>summary.caption (Comprehensive Global Description)</label>
+              <div class="field-header"><label>summary.caption (Comprehensive Global Description)</label><span class="tag-edit-cue" id="ds-copy-txt" style="display:none;" title="Replace summary.caption with the image's .txt" onclick="copyTxtToSummary()">📋 Copy from .txt</span></div>
               <textarea id="sum-caption" rows="3" placeholder="Full scene atmosphere, camera, lighting..." oninput="updateSummaryField('caption', this.value)"></textarea>
             </div>
             <div class="form-group">
-              <div class="field-header"><label>summary.meta (Style / Genre)</label><span class="tag-edit-cue" onclick="toggleFullListEdit('summary.meta')">✏️ Edit Text</span></div>
+              <div class="field-header"><label>summary.meta (Style / Genre)</label><span style="display:flex; gap:8px;"><span class="tag-edit-cue" id="ds-apply-meta" style="display:none;" title="Copy this summary.meta to every image's JSON in the dataset" onclick="applyMetaToDataset()">📚 Apply to dataset</span><span class="tag-edit-cue" onclick="toggleFullListEdit('summary.meta')">✏️ Edit Text</span></span></div>
               <div id="tag-wrap-summary-meta"></div>
             </div>
             <div class="form-group">
@@ -151,6 +167,7 @@
           </div>
         </div>
 
+        <hr style="border:0; border-top:2px solid var(--text-main); margin:10px 0 6px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
           <button class="btn btn-icon" style="font-size:0.7rem; padding:2px 6px;" onclick="addNewItem()">＋ Add Box</button>
           <span class="toolbar-label">Bounding Box Elements (Drag ⠿ to Reorder)</span>
@@ -164,6 +181,7 @@
       </div>
 
       <div id="tab-txt" class="tab-content" style="display:none;">
+        <button class="btn" title="Replace summary.caption with this text" onclick="copyTxtToSummary()">📋 Copy to summary caption</button>
         <textarea id="txt-caption" readonly spellcheck="false" placeholder="No .txt file for this image."></textarea>
       </div>
     </aside>
@@ -177,6 +195,7 @@
   <script src="interact.js"></script>
   <script src="importer.js"></script>
   <script src="dataset.js"></script>
+  <script src="crop.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

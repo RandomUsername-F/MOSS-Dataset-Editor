@@ -35,24 +35,27 @@ header { background: var(--bg-panel); border-bottom: 1px solid var(--border); pa
 .canvas-container { position: absolute; transform-origin: 0 0; background-color: var(--canvas-bg) !important; border: 1px solid var(--border); box-shadow: 0 16px 40px -8px rgba(0,0,0,0.7), 0 0 0 1px var(--border); border-radius: 3px; }
 svg#canvas { display: block; width: 100%; height: 100%; }
 
-.bbox-rect { stroke-width: 2px; vector-effect: non-scaling-stroke; cursor: move; }
+.bbox-rect { stroke-width: calc(2px * var(--px, 1)); cursor: move; }
 .bbox-rect.char { stroke: var(--color-char); fill: var(--color-char); fill-opacity: 0.12; }
 .bbox-rect.obj { stroke: var(--color-obj); fill: var(--color-obj); fill-opacity: 0.08; }
 .bbox-rect.txt { stroke: var(--color-txt); fill: var(--color-txt); fill-opacity: 0.15; }
 .bbox-group.is-locked .bbox-rect { cursor: default !important; }
 .bbox-group.is-hidden { opacity: 0.28; }
-.bbox-group.is-hidden .bbox-rect { stroke: var(--color-hidden) !important; fill: var(--color-hidden) !important; stroke-dasharray: 4 4 !important; }
+.bbox-group.is-hidden .bbox-rect { stroke: var(--color-hidden) !important; fill: var(--color-hidden) !important; stroke-dasharray: calc(4px * var(--px, 1)) calc(4px * var(--px, 1)) !important; }
 .svg-tag { font-family: var(--font-mono); font-size: 11px; fill: #fff; font-weight: 600; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
 
-.bbox-active-outline { fill: rgba(56,189,248,0.08); stroke: #38bdf8; stroke-width: 2px; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
-.bbox-active-outline.is-locked { stroke: var(--color-locked); stroke-dasharray: 4 3; fill: rgba(245,158,11,0.06); }
-#active-handles-layer .handle { fill: #fff; stroke: #090d16; stroke-width: 1.5px; vector-effect: non-scaling-stroke; pointer-events: all; cursor: pointer; }
-#active-handles-layer .handle:hover { fill: #38bdf8; stroke: #fff; }
-.handle.nw, .handle.se { cursor: nwse-resize !important; }
-.handle.ne, .handle.sw { cursor: nesw-resize !important; }
-.handle.n, .handle.s { cursor: ns-resize !important; }
-.handle.w, .handle.e { cursor: ew-resize !important; }
-.marquee-box { fill: rgba(56,189,248,0.16); stroke: #38bdf8; stroke-width: 1.5px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.bbox-active-outline { fill: rgba(56,189,248,0.08); stroke: #38bdf8; stroke-width: calc(2px * var(--px, 1)); stroke-dasharray: calc(5px * var(--px, 1)) calc(3px * var(--px, 1)); pointer-events: none; }
+.bbox-active-outline.is-locked { stroke: var(--color-locked); stroke-dasharray: calc(4px * var(--px, 1)) calc(3px * var(--px, 1)); fill: rgba(245,158,11,0.06); }
+#active-handles-layer .handle { fill: #fff; stroke: #090d16; stroke-width: 1.5px; pointer-events: none; }
+.handle-g { transform: translate(var(--hx), var(--hy)) scale(var(--px, 1)); }
+.handle-hit { fill: transparent; pointer-events: all; }
+.handle-g:hover .handle { fill: #38bdf8; stroke: #fff; }
+.edge { fill: none; stroke: transparent; stroke-width: calc(12px * var(--px, 1)); pointer-events: stroke; }
+.handle-g.nw, .handle-g.se { cursor: nwse-resize; }
+.handle-g.ne, .handle-g.sw { cursor: nesw-resize; }
+.handle-g.n, .handle-g.s, .edge.n, .edge.s { cursor: ns-resize; }
+.handle-g.w, .handle-g.e, .edge.w, .edge.e { cursor: ew-resize; }
+.marquee-box { fill: rgba(56,189,248,0.16); stroke: #38bdf8; stroke-width: calc(1.5px * var(--px, 1)); stroke-dasharray: calc(4px * var(--px, 1)) calc(3px * var(--px, 1)); pointer-events: none; }
 
 /* ---- Sidebar ---- */
 .sidebar { width: 440px; background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; user-select: text; }
@@ -148,7 +151,7 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 
 /* ---- Overlays & toasts ---- */
 #drop-overlay { position: fixed; inset: 0; background: rgba(11,15,25,0.88); z-index: 9999; backdrop-filter: blur(4px); border: 3px dashed var(--border-focus); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; pointer-events: none; }
-#toast-container { position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+#toast-container { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none; }
 .toast { background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-main); padding: 8px 16px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.6); display: flex; align-items: center; gap: 8px; animation: toast-in 0.18s ease-out; transition: opacity 0.3s; pointer-events: all; }
 .toast.success { border-color: #10b981; color: #10b981; }
 .toast.warn { border-color: #f59e0b; color: #f59e0b; }
@@ -168,3 +171,14 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 .ds-row img { width: 40px; height: 36px; object-fit: cover; border-radius: 3px; background: var(--bg-input); }
 .ds-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #txt-caption { flex: 1; resize: none; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-family: var(--font-mono); font-size: 0.78rem; }
+
+/* ---- Crop tool ---- */
+.crop-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 14px; background: var(--bg-panel); border-bottom: 2px solid #10b981; font-size: 0.75rem; flex-shrink: 0; }
+.crop-bar input { width: 64px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; font-family: var(--font-mono); }
+.crop-bar input:disabled { opacity: 0.5; }
+.crop-note { color: var(--text-muted); font-size: 0.68rem; }
+#crop-info { font-family: var(--font-mono); }
+#crop-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 5; }
+#crop-svg .crop-dim { fill: rgba(0,0,0,0.6); pointer-events: none; }
+#crop-svg .crop-frame { fill: transparent; stroke: #10b981; stroke-width: calc(2px * var(--px, 1)); stroke-dasharray: calc(6px * var(--px, 1)) calc(4px * var(--px, 1)); pointer-events: all; cursor: move; }
+#crop-svg .handle { fill: #fff; stroke: #090d16; stroke-width: 1.5px; pointer-events: none; }

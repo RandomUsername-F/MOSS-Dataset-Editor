@@ -34,7 +34,10 @@ function setResolution(w, h) {
 }
 
 /* ---- Pan & zoom ---- */
-const applyTransform = () => { container.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
+const applyTransform = () => {
+  container.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
+  container.style.setProperty('--px', 1 / zoom); // 1 screen pixel in canvas units, keeps strokes/handles zoom-independent
+};
 
 function zoomAt(cx, cy, newZoom) {
   const z = clamp(newZoom, 0.08, 8);

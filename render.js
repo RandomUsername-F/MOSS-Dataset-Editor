@@ -79,11 +79,18 @@ function renderActiveHandlesLayer() {
 
   const item = selectedIndices.size === 1 ? sceneData.items[selectedIndex] : null;
   if (item && !item.locked) {
-    const [x1, y1, x2, y2] = item.bbox, S = 8;
+    const [x1, y1, x2, y2] = item.bbox;
+    const grab = (el, mode) => { // invisible hit areas are sized in screen pixels via --px
+      el.addEventListener('mousedown', e => { e.stopPropagation(); beginInteraction(mode, e, item); });
+      layer.appendChild(el);
+    };
+    const edges = { n: [x1, y1, x2, y1], s: [x1, y2, x2, y2], w: [x1, y1, x1, y2], e: [x2, y1, x2, y2] };
+    for (const [mode, [ax, ay, bx, by]] of Object.entries(edges)) grab(svgEl('line', { x1: ax, y1: ay, x2: bx, y2: by, class: `edge ${mode}` }), mode);
     for (const [mode, [fx, fy]] of Object.entries(HANDLE_POS)) {
-      const handle = svgEl('rect', { x: x1 + (x2 - x1) * fx - S / 2, y: y1 + (y2 - y1) * fy - S / 2, width: S, height: S, class: `handle ${mode}` });
-      handle.addEventListener('mousedown', e => { e.stopPropagation(); beginInteraction(mode, e, item); });
-      layer.appendChild(handle);
+      const g = svgEl('g', { class: `handle-g ${mode}` });
+      g.style.cssText = `--hx:${x1 + (x2 - x1) * fx}px;--hy:${y1 + (y2 - y1) * fy}px`;
+      g.append(svgEl('rect', { x: -8, y: -8, width: 16, height: 16, class: 'handle-hit' }), svgEl('rect', { x: -4, y: -4, width: 8, height: 8, class: 'handle' }));
+      grab(g, mode);
     }
   }
   canvas.appendChild(layer);
