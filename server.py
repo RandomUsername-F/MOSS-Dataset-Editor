@@ -15,7 +15,8 @@ MAX_JSON = 20_000_000
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
-D = {'root': None, 'files': [], 'version': 0}
+D = {'root': None, 'files': [], 'view': None, 'version': 0}
+TEXT_CACHE = {}  # image stem -> (file stamps, lowercased searchable text)
 lock = threading.Lock()
 
 
@@ -86,7 +87,8 @@ def load_dataset():
         return jsonify(error='Folder not found'), 400
     files, truncated = scan(root, bool(j.get('recursive')))
     with lock:
-        D.update(root=root, files=files, version=time.time_ns() // 1_000_000)  # unique per load, even across restarts
+        D.update(root=root, files=files, view=None, version=time.time_ns() // 1_000_000)  # unique per load, even across restarts
+        TEXT_CACHE.clear()
         version = D['version']
     return jsonify(count=len(files), truncated=truncated, version=version, root=root)
 
@@ -95,8 +97,74 @@ def load_dataset():
 def items():
     off, lim = max(0, request.args.get('offset', 0, int)), min(request.args.get('limit', 200, int), 1000)
     with lock:
-        files = D['files']
-    return jsonify(items=[{'rel': f.replace('\\', '/'), 'name': os.path.basename(f)} for f in files[off:off + lim]])
+        files, view = D['files'], D['view']
+    idx = view[off:off + lim] if request.args.get('view') == '1' and view is not None else range(off, min(off + lim, len(files)))
+    return jsonify(items=[{'i': i, 'rel': files[i].replace('\\', '/'), 'name': os.path.basename(files[i])} for i in idx])
+
+
+def gather(o, out):
+    if isinstance(o, str):
+        out.append(o)
+    elif isinstance(o, list):
+        for v in o:
+            gather(v, out)
+    elif isinstance(o, dict):
+        for v in o.values():
+            gather(v, out)
+
+
+def search_text(img):
+    """Lowercased captions, tags, labels, meta and .txt of one image (cached until the files change)."""
+    base = os.path.splitext(img)[0]
+    stamps = []
+    for ext in ('.json', '.txt'):
+        try:
+            stamps.append(os.stat(base + ext).st_mtime_ns)
+        except OSError:
+            stamps.append(0)
+    hit = TEXT_CACHE.get(base)
+    if hit and hit[0] == stamps:
+        return hit[1]
+    parts = []
+    if stamps[0]:
+        try:
+            with open(base + '.json', encoding='utf-8-sig') as f:
+                obj = json.load(f)
+            if isinstance(obj, dict):
+                gather(obj.get('summary'), parts)
+                gather(obj.get('items'), parts)
+        except (OSError, ValueError):
+            pass
+    if stamps[1]:
+        try:
+            with open(base + '.txt', encoding='utf-8-sig', errors='replace') as f:
+                parts.append(f.read(1_000_000))
+        except OSError:
+            pass
+    text = '\n'.join(parts).lower()
+    TEXT_CACHE[base] = (stamps, text)
+    return text
+
+
+@app.post('/api/search')
+def search():
+    j = request.get_json(silent=True) or {}
+    q = str(j.get('q', '')).strip()
+    neg = q.startswith('-')
+    term = (q[1:] if neg else q).strip().lower()
+    with lock:
+        files, root, ver = D['files'], D['root'], D['version']
+    if j.get('v') != ver:
+        abort(404)
+    view = None
+    if term:
+        view = [i for i, f in enumerate(files) if (term in search_text(os.path.join(root, f))) != neg]
+    with lock:
+        if D['version'] == ver:
+            D['view'] = view
+    cur = j.get('current', -1)
+    pos = cur if view is None else (view.index(cur) if cur in view else -1)
+    return jsonify(count=len(files) if view is None else len(view), total=len(files), pos=pos, filtered=view is not None)
 
 
 @app.get('/api/image')

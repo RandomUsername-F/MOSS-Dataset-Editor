@@ -13,10 +13,12 @@ Modified to work as stand-alone dataset manager. Meant for manual updating of ol
 - **Per-image JSON autosave:** the sibling `.json` is loaded, or created if missing, and every change is saved immediately.
 - **Text caption tab** shows the sibling `.txt` of the selected image (read-only). **Copy to summary caption** (in that tab) and **Copy from .txt** (next to `summary.caption`) replace the summary caption with its text.
 - **Apply to dataset** (next to `summary.meta`) writes the current Style / Genre meta to every image's JSON in the loaded dataset, creating missing JSONs.
-- **Page Up / Page Down** select the previous / next image in the dataset.
+- **Search box** above the image list filters the dataset by captions, tags, labels, meta and the `.txt` file (not case sensitive). Start the term with `-` (e.g. `-forest`) to show only images that do **not** match. Page Up/Down and Ctrl+↑/↓ follow the filtered list.
+- **Page Up / Page Down** (or **Ctrl+↑ / Ctrl+↓**, which also work while typing) select the previous / next image in the dataset.
 - **Crop tool** (✂️ button right of Redo):
   - **Manual** mode: drag or resize the frame, or type X/Y/W/H.
   - **Auto (÷16)** mode: shows a centered frame cropped down to the nearest multiple of 16 and waits for **✔ Confirm crop**.
+  - **Shortcuts:** **Ctrl+D** or **Ctrl+Numpad0** starts auto-crop, **Ctrl+Enter** confirms the crop, **Esc** cancels.
   - Existing boxes are shifted to the new coordinates. Boxes fully outside the crop are removed.
   - The image file is overwritten at maximum quality (JPEG quality 100, WebP lossless). **Backup original** keeps the first original in `.crop_backup` inside the dataset folder. GIFs are not supported.
 - **Duplicate button (⧉)** on each box card clones the box.

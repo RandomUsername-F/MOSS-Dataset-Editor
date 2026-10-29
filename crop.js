@@ -84,7 +84,18 @@ window.addEventListener('mousemove', e => {
   cropRender();
 });
 window.addEventListener('mouseup', () => { crop.drag = null; });
-window.addEventListener('keydown', e => { if (e.key === 'Escape' && crop.active) cancelCrop(); });
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && crop.active) return cancelCrop();
+  if (!ds.active || !e.ctrlKey || e.altKey || e.shiftKey || e.repeat) return;
+  if (e.code === 'KeyD' || e.code === 'Numpad0') { // Ctrl+D / Ctrl+Numpad0: auto-crop
+    e.preventDefault();
+    if (!crop.active) startCrop();
+    if (crop.active) setCropMode('auto');
+  } else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && crop.active) { // Ctrl+Enter: confirm
+    e.preventDefault();
+    confirmCrop();
+  }
+});
 
 function cancelCrop() {
   if (!crop.active) return;

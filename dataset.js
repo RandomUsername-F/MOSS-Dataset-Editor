@@ -1,6 +1,6 @@
 /* Dataset mode: folder loading through server.py, virtualised image list, per-image JSON autosave. */
 
-const ds = { active: false, count: 0, version: 0, index: -1, token: 0, bust: new Map(), items: new Map(), chunks: new Set(),
+const ds = { active: false, count: 0, total: 0, pos: -1, gen: 0, filtered: false, version: 0, index: -1, token: 0, bust: new Map(), items: new Map(), chunks: new Map(),
   loading: false, readOnly: false, exactDims: false, lastSaved: '', pending: null, timer: null, saving: Promise.resolve() };
 const DS_ROW = 44, DS_CHUNK = 200;
 const dsRows = new Map();
@@ -14,6 +14,7 @@ async function api(url, opts) {
 const jsonOpts = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body });
 const dsQuery = i => `v=${ds.version}&i=${i}`;
 const dsStatus = t => { $('ds-status').textContent = t; };
+const dsInfo = () => { $('ds-info').textContent = ds.filtered ? `${ds.count} / ${ds.total} images` : `${ds.total} images`; };
 
 /* ---- Loading ---- */
 async function loadDataset() {
@@ -29,16 +30,18 @@ async function loadDataset() {
     if (info.truncated) showToast(`⚠️ Scan capped at ${info.count} images.`, 'warn');
     dsRows.forEach(el => el.remove());
     dsRows.clear();
-    Object.assign(ds, { active: true, count: info.count, version: info.version, index: -1, bust: new Map(), items: new Map(), chunks: new Set(), pending: null });
+    Object.assign(ds, { active: true, count: info.count, total: info.count, pos: -1, gen: ds.gen + 1, filtered: false, version: info.version, index: -1, bust: new Map(), items: new Map(), chunks: new Map(), pending: null });
+    $('ds-search').value = '';
+    dsLastQuery = '';
     $('ds-sidebar').style.display = 'flex';
     $('ds-apply-meta').style.display = '';
     $('ds-copy-txt').style.display = '';
     $('ds-crop-btn').style.display = '';
-    $('ds-info').textContent = `${info.count} images`;
+    dsInfo();
     $('ds-list').scrollTop = 0;
     dsStatus('');
     dsRender();
-    await selectDatasetImage(0);
+    await selectDatasetImage(0, 0);
   } catch (e) { showToast('⚠️ ' + e.message, 'warn'); }
 }
 
@@ -56,16 +59,18 @@ async function leaveDataset() {
 }
 
 /* ---- Virtual list (only visible rows are in the DOM; names are fetched in chunks) ---- */
-async function dsFetch(c) {
-  if (ds.chunks.has(c)) return;
-  ds.chunks.add(c);
-  const v = ds.version;
-  try {
-    const r = await api(`/api/items?offset=${c * DS_CHUNK}&limit=${DS_CHUNK}`);
-    if (v !== ds.version) return;
-    r.items.forEach((it, k) => ds.items.set(c * DS_CHUNK + k, it));
-    dsRender();
-  } catch { ds.chunks.delete(c); }
+function dsFetch(c) {
+  if (ds.chunks.has(c)) return ds.chunks.get(c);
+  const gen = ds.gen;
+  const p = api(`/api/items?offset=${c * DS_CHUNK}&limit=${DS_CHUNK}${ds.filtered ? '&view=1' : ''}`)
+    .then(r => {
+      if (gen !== ds.gen) return;
+      r.items.forEach((it, k) => ds.items.set(c * DS_CHUNK + k, it));
+      dsRender();
+    })
+    .catch(() => { if (gen === ds.gen) ds.chunks.delete(c); });
+  ds.chunks.set(c, p);
+  return p;
 }
 
 function dsRender() {
@@ -79,10 +84,10 @@ function dsRender() {
     if (dsRows.has(i)) continue;
     const it = ds.items.get(i);
     if (!it) { dsFetch(Math.floor(i / DS_CHUNK)); continue; }
-    const el = Object.assign(document.createElement('div'), { className: `ds-row${i === ds.index ? ' active' : ''}` });
+    const el = Object.assign(document.createElement('div'), { className: `ds-row${it.i === ds.index ? ' active' : ''}` });
     el.style.top = `${i * DS_ROW}px`;
-    el.innerHTML = `<img loading="lazy" alt="" src="/api/thumb?${dsQuery(i)}&t=${ds.bust.get(i) || 0}"><span title="${escapeHtml(it.rel)}">${escapeHtml(it.name)}</span>`;
-    el.onclick = () => selectDatasetImage(i);
+    el.innerHTML = `<img loading="lazy" alt="" src="/api/thumb?${dsQuery(it.i)}&t=${ds.bust.get(it.i) || 0}"><span title="${escapeHtml(it.rel)}">${escapeHtml(it.name)}</span>`;
+    el.onclick = () => selectDatasetImage(it.i, i);
     box.appendChild(el);
     dsRows.set(i, el);
   }
@@ -97,14 +102,15 @@ function dsWarnDims(W, H, toast = false) {
 }
 
 /* ---- Selecting an image ---- */
-async function selectDatasetImage(i) {
-  if (!ds.active || i < 0 || i >= ds.count || i === ds.index) return;
+async function selectDatasetImage(i, pos) {
+  if (!ds.active || i < 0 || i >= ds.total || i === ds.index) return;
   await flushSave();
   cancelCrop();
   const token = ++ds.token;
   ds.loading = true;
   ds.index = i;
-  dsRows.forEach((el, k) => el.classList.toggle('active', k === i));
+  if (pos !== undefined) ds.pos = pos;
+  dsRows.forEach((el, r) => el.classList.toggle('active', ds.items.get(r)?.i === i));
   try {
     const url = `/api/image?${dsQuery(i)}&t=${ds.bust.get(i) || 0}`; // t defeats the browser's in-page image cache after a crop
     const [side, img] = await Promise.all([
@@ -142,18 +148,51 @@ async function selectDatasetImage(i) {
   }
 }
 
-/* ---- Page Up / Page Down: previous / next image ---- */
-window.addEventListener('keydown', e => {
-  if (!ds.active || (e.key !== 'PageUp' && e.key !== 'PageDown')) return;
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+/* ---- Page Up / Page Down (not while typing) or Ctrl+Up / Ctrl+Down (always): previous / next image ---- */
+window.addEventListener('keydown', async e => {
+  if (!ds.active) return;
+  const ctrlNav = e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown');
+  const pageNav = (e.key === 'PageUp' || e.key === 'PageDown') && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (!ctrlNav && !pageNav) return;
   e.preventDefault();
-  const i = ds.index + (e.key === 'PageDown' ? 1 : -1);
-  if (i < 0 || i >= ds.count) return;
-  selectDatasetImage(i);
-  const box = $('ds-list'), top = i * DS_ROW; // keep the selected row visible
+  const step = e.key === 'PageDown' || e.key === 'ArrowDown' ? 1 : -1;
+  const r = ds.pos < 0 ? (step > 0 ? 0 : ds.count - 1) : ds.pos + step; // position in the (filtered) list
+  if (r < 0 || r >= ds.count) return;
+  ds.pos = r;
+  const box = $('ds-list'), top = r * DS_ROW; // keep the selected row visible
   if (top < box.scrollTop) box.scrollTop = top;
   else if (top + DS_ROW > box.scrollTop + box.clientHeight) box.scrollTop = top + DS_ROW - box.clientHeight;
+  await dsFetch(Math.floor(r / DS_CHUNK));
+  const it = ds.items.get(r);
+  if (it) selectDatasetImage(it.i, r);
 });
+
+/* ---- Search: matches captions, tags, labels and the .txt; a leading - shows non-matching images ---- */
+let dsLastQuery = '';
+$('ds-search').addEventListener('keydown', e => { if (e.key === 'Enter') applyDsSearch(true); }); // Enter always re-runs
+$('ds-search').addEventListener('blur', () => applyDsSearch(false)); // losing focus runs it only if the text changed
+
+async function applyDsSearch(force) {
+  if (!ds.active) return;
+  const q = $('ds-search').value;
+  if (!force && q === dsLastQuery) return;
+  dsLastQuery = q;
+  const mine = ++ds.gen;
+  try {
+    await flushSave();
+    const r = await api('/api/search', jsonOpts('POST', JSON.stringify({ v: ds.version, q, current: ds.index })));
+    if (mine !== ds.gen) return;
+    Object.assign(ds, { count: r.count, total: r.total, pos: r.pos, filtered: r.filtered, gen: ds.gen + 1, items: new Map(), chunks: new Map() });
+    dsRows.forEach(el => el.remove());
+    dsRows.clear();
+    $('ds-list').scrollTop = r.pos >= 0 ? Math.max(0, r.pos * DS_ROW - 100) : 0;
+    dsInfo();
+    dsRender();
+  } catch (e) {
+    if (mine === ds.gen) ds.chunks = new Map();
+    showToast('⚠️ ' + e.message, 'warn');
+  }
+}
 
 /* ---- Text caption -> summary.caption ---- */
 function copyTxtToSummary() {
@@ -168,7 +207,7 @@ function copyTxtToSummary() {
 async function applyMetaToDataset() {
   if (!ds.active) return;
   const meta = clone(sceneData.summary.meta || []);
-  if (!confirm(`Set summary.meta to [${meta.join(', ') || 'empty'}] on all ${ds.count} images?\nExisting meta in every JSON is overwritten; missing JSONs are created.`)) return;
+  if (!confirm(`Set summary.meta to [${meta.join(', ') || 'empty'}] on all ${ds.total} images?\nExisting meta in every JSON is overwritten; missing JSONs are created.`)) return;
   try {
     await flushSave();
     showToast('Applying meta to dataset…', 'info');

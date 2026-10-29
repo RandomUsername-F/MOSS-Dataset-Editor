@@ -164,6 +164,7 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 .ds-head { padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 0.65rem; font-family: var(--font-mono); color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
 .ds-warn { color: var(--color-locked); }
 .ds-list { flex: 1; overflow-y: auto; position: relative; }
+.ds-search { margin: 6px; padding: 4px 6px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; font-size: 0.72rem; min-width: 0; }
 #ds-spacer { width: 1px; }
 .ds-row { position: absolute; left: 0; right: 0; height: 44px; display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 6px; padding: 0 6px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 0.68rem; }
 .ds-row:hover, .ds-row.active { background: var(--bg-card-hover); }
