@@ -128,6 +128,46 @@ function duplicateItem(idx) {
   selectItem(idx + 1);
 }
 
+/* ---- Copy / paste boxes (Ctrl+C / Ctrl+V) ---- */
+let boxClipboard = [], mouseClient = null; // mouseClient: last cursor position while over the canvas area
+
+function copySelectedItems() {
+  if (typeof crop !== 'undefined' && crop.active) return false;
+  const idxs = [...selectedIndices].sort((a, b) => a - b).filter(i => sceneData.items[i]);
+  if (!idxs.length) return false;
+  boxClipboard = idxs.map(i => clone(sceneData.items[i])); // clone() drops editor-only flags
+  showToast(`📋 Copied ${idxs.length} box${idxs.length > 1 ? 'es' : ''}`, 'info');
+  return true;
+}
+
+function pasteItems() {
+  if (!boxClipboard.length || (typeof crop !== 'undefined' && crop.active)) return false;
+  const { width: W, height: H } = sceneData;
+  const minX = Math.min(...boxClipboard.map(it => it.bbox[0])), maxX = Math.max(...boxClipboard.map(it => it.bbox[2]));
+  const minY = Math.min(...boxClipboard.map(it => it.bbox[1])), maxY = Math.max(...boxClipboard.map(it => it.bbox[3]));
+  let cx = W / 2, cy = H / 2; // same centre as a newly added box
+  if (mouseClient) {
+    const r = viewport.getBoundingClientRect();
+    cx = (mouseClient.x - r.left - pan.x) / zoom;
+    cy = (mouseClient.y - r.top - pan.y) / zoom;
+  }
+  let dx = Math.round(cx - (minX + maxX) / 2), dy = Math.round(cy - (minY + maxY) / 2);
+  dx = W - maxX >= -minX ? clamp(dx, -minX, W - maxX) : -minX; // keep the pasted boxes inside the canvas
+  dy = H - maxY >= -minY ? clamp(dy, -minY, H - maxY) : -minY;
+  recordState();
+  const first = sceneData.items.length;
+  boxClipboard.forEach(src => {
+    const copy = clone(src);
+    copy.bbox = [src.bbox[0] + dx, src.bbox[1] + dy, src.bbox[2] + dx, src.bbox[3] + dy];
+    attachEditorProperties(copy);
+    sceneData.items.push(copy);
+  });
+  selectedIndices = new Set(boxClipboard.map((_, k) => first + k));
+  selectedIndex = sceneData.items.length - 1;
+  renderAll();
+  return true;
+}
+
 function changeItemLabel(idx, newLabel) {
   const item = sceneData.items[idx];
   if (item?.locked) return;

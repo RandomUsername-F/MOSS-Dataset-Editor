@@ -77,11 +77,15 @@ function switchTab(tab) {
 }
 
 function setupKeyboardShortcuts() {
+  viewport.addEventListener('mousemove', e => { mouseClient = { x: e.clientX, y: e.clientY }; });
+  viewport.addEventListener('mouseleave', () => { mouseClient = null; });
   window.addEventListener('keydown', e => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return; // leave native editing alone
     const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
     if (mod && key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (mod && key === 'y') { e.preventDefault(); redo(); }
+    else if (mod && !e.shiftKey && key === 'c' && !window.getSelection().toString()) { if (copySelectedItems()) e.preventDefault(); }
+    else if (mod && !e.shiftKey && key === 'v') { if (pasteItems()) e.preventDefault(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIndices.size) { e.preventDefault(); deleteSelectedItems(); }
   });
 }

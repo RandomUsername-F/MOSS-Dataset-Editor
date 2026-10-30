@@ -22,6 +22,7 @@ Modified to work as stand-alone dataset manager. Meant for manual updating of ol
   - Existing boxes are shifted to the new coordinates. Boxes fully outside the crop are removed.
   - The image file is overwritten at maximum quality (JPEG quality 100, WebP lossless). **Backup original** keeps the first original in `.crop_backup` inside the dataset folder. GIFs are not supported.
 - **Duplicate button (⧉)** on each box card clones the box.
+- **Ctrl+C / Ctrl+V** copy the selected box(es) and paste them: centered on the mouse if it is over the canvas, otherwise at the canvas center (where new boxes are added). Disabled while a text field is focused.
 - **Box rendering:** borders, dashes and handles keep a constant on-screen size at any zoom. The resize grab area is larger than the visible border and handles.
 - **Mouse controls:** only the left button moves boxes. Middle and right buttons drag the canvas.
 - **Thumbnail cache** (`.thumb_cache`) is cleared when the server exits.
