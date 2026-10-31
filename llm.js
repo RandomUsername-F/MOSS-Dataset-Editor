@@ -14,8 +14,8 @@ const LLM_DEFAULT_PROMPTS = {
   bbox_scale: 1000, // 1000 = coordinates normalized to 0-1000, 0 = pixels of the image that is sent
   max_image_side: 1280,
   detect: 'Detect every distinct character (person or creature), object and visible text region in this {{width}}x{{height}} image. Return ONLY a JSON array: [{"label":"character|object|text","bbox":[x1,y1,x2,y2],"text":"literal text, only when label is text"}]. Coordinates are integers; x1,y1 is the top-left corner and x2,y2 the bottom-right corner.',
-  scene_caption: 'Write one comprehensive paragraph describing the whole image: subject, atmosphere, camera, lighting and composition. Already annotated context (keep it consistent):\n{{context}}\nOutput only the description.',
-  scene_tags: 'List 3-8 short style/genre tags for this image (for example: photography, anime, cinematic, watercolor). Context:\n{{context}}\nReturn ONLY a JSON array of strings.',
+  scene_caption: 'Write one comprehensive paragraph describing the whole image: subject, atmosphere, visual style (for example photorealistic, anime, watercolor), camera, lighting and composition. Already annotated context (keep it consistent):\n{{context}}\nOutput only the description.',
+  scene_tags: 'List 1-3 tags for the medium or format of this image only (for example: photograph, illustration, poster, 3D render, screenshot). Do not include visual styles such as photorealistic, anime or watercolor. Context:\n{{context}}\nReturn ONLY a JSON array of strings.',
   palette: 'List the 5 dominant colors of this image as hex codes. Return ONLY a JSON array such as ["#aabbcc"].',
   item_caption: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to caption. Write the caption of the {{label}} in image 2: appearance, posture and details, describing strictly what is visible inside image 2. Do not describe or mention the surroundings, the rest of the scene or other elements. Use the full scene only to understand what the {{label}} is. Start directly with the subject (for example "A woman in a red coat holding an umbrella") and never mention "image", "crop", "target" or "element". Element data:\n{{target}}\nScene context, for reference only (never describe it):\n{{context}}\nOutput only the caption text.',
   item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.'
@@ -24,9 +24,9 @@ const LLM_DEFAULT_PROMPTS = {
 const llmCfg = (() => { try { return JSON.parse(localStorage.getItem('llm_cfg')) || {}; } catch { return {}; } })();
 llmCfg.url ||= LLM_DEFAULT_URL;
 llmCfg.template ||= clone(LLM_DEFAULT_TEMPLATE);
-if (llmCfg.v !== 4) { // v4: item requests send the full image plus the crop
+if (llmCfg.v !== 5) { // v5: scene tags are medium-only; item requests send the full image plus the crop
   llmCfg.prompts = {};
-  llmCfg.v = 4;
+  llmCfg.v = 5;
   if (!JSON.stringify(llmCfg.template).includes('{{crop}}')) llmCfg.template.messages?.findLast(m => Array.isArray(m.content))?.content.push({ type: 'image_url', image_url: { url: '{{crop}}' } });
 }
 llmCfg.prompts = { ...LLM_DEFAULT_PROMPTS, ...llmCfg.prompts };

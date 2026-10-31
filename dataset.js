@@ -14,6 +14,9 @@ async function api(url, opts) {
 const jsonOpts = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body });
 const dsQuery = i => `v=${ds.version}&i=${i}`;
 const dsStatus = t => { $('ds-status').textContent = t; };
+// The editor canvas uses the exact image size, but a saved layout must use multiples of 16 (MOSS-Image Layout rule).
+const dsRound16 = v => Math.max(16, Math.round(v / 16) * 16);
+const dsSerialize = () => JSON.stringify({ ...sceneData, width: dsRound16(sceneData.width), height: dsRound16(sceneData.height) }, null, 2);
 const dsInfo = () => { $('ds-info').textContent = ds.filtered ? `${ds.count} / ${ds.total} images` : `${ds.total} images`; };
 
 /* ---- Loading ---- */
@@ -140,7 +143,7 @@ async function selectDatasetImage(i, pos) {
     $('txt-caption').value = side.txt ?? '';
 
     dsWarnDims(W, H, true);
-    ds.lastSaved = side.exists ? JSON.stringify(sceneData, null, 2) : '';
+    ds.lastSaved = side.exists ? dsSerialize() : '';
     dsStatus(side.exists ? '' : '+ new JSON');
   } catch (e) { showToast('⚠️ ' + e.message, 'warn'); }
   finally {
@@ -212,7 +215,7 @@ async function applyMetaToDataset() {
     await flushSave();
     showToast('Applying meta to dataset…', 'info');
     const r = await api('/api/apply-meta', jsonOpts('POST', JSON.stringify({ v: ds.version, meta })));
-    ds.lastSaved = JSON.stringify(sceneData, null, 2);
+    ds.lastSaved = dsSerialize();
     showToast(`✅ Meta applied: ${r.updated} updated, ${r.created} created, ${r.skipped} skipped.`, 'info');
   } catch (e) { showToast('⚠️ ' + e.message, 'warn'); }
 }
@@ -220,7 +223,7 @@ async function applyMetaToDataset() {
 /* ---- Autosave (debounced; flushed before switching images) ---- */
 function datasetSaveSoon() {
   if (!ds.active || ds.loading || ds.readOnly || ds.index < 0) return;
-  const body = JSON.stringify(sceneData, null, 2); // editor-only flags are non-enumerable; hidden boxes are kept
+  const body = dsSerialize(); // editor-only flags are non-enumerable; hidden boxes are kept
   if (body === ds.lastSaved || body === ds.pending?.body) return;
   ds.pending = { i: ds.index, v: ds.version, body };
   dsStatus('● editing');

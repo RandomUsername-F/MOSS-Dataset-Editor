@@ -330,7 +330,7 @@ def apply_meta():
                 from PIL import Image  # needed for the dimensions of new JSONs
                 with Image.open(img) as im:
                     w, h = im.size
-                obj = {'width': w, 'height': h, 'bbox_coord_space': 'abs', 'bbox_format': 'xyxy',
+                obj = {'width': (w + 8) // 16 * 16 or 16, 'height': (h + 8) // 16 * 16 or 16, 'bbox_coord_space': 'abs', 'bbox_format': 'xyxy',
                        'summary': {'canvas': 'single', 'meta': [], 'palette': [], 'caption': ''}, 'items': []}
                 key = 'created'
             if not isinstance(obj.get('summary'), dict):
