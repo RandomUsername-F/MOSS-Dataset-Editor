@@ -139,6 +139,18 @@
           </div>
         </div>
 
+        <div class="card llm-card">
+          <div class="summary-header"><span style="display:flex; align-items:center;"><span class="summary-title">🤖 LLM Auto-Caption</span><span id="llm-spinner" class="llm-spinner" style="display:none;" title="Waiting for the LLM response"></span></span><span id="llm-status" class="llm-status"></span></div>
+          <div class="form-body">
+            <div class="llm-row">
+              <button class="btn" title="Detect boxes, then caption and tag the scene and every new box" onclick="llmFull()">✨ Boxes + Caption + Tags</button>
+              <button class="btn" title="Caption and tag only existing elements that are empty" onclick="llmEmpty()">✨ Fill empty elements</button>
+              <input id="llm-url" type="text" spellcheck="false" title="LLM server address (OpenAI-compatible chat completions)" placeholder="http://localhost:1234/v1/chat/completions">
+              <button class="btn btn-icon" title="Request settings" onclick="llmOpenSettings()">⚙️</button>
+            </div>
+          </div>
+        </div>
+
         <div class="card summary-card">
           <div class="summary-header" onclick="toggleSummaryCollapse()">
             <span class="summary-title">🎬 Scene Summary &amp; Global Prompt</span>
@@ -154,15 +166,15 @@
               </select>
             </div>
             <div class="form-group">
-              <div class="field-header"><label>summary.caption (Comprehensive Global Description)</label><span class="tag-edit-cue" id="ds-copy-txt" style="display:none;" title="Replace summary.caption with the image's .txt" onclick="copyTxtToSummary()">📋 Copy from .txt</span></div>
+              <div class="field-header"><span style="display:flex; gap:8px; align-items:center;"><label>summary.caption (Comprehensive Global Description)</label><span class="tag-edit-cue" title="Ask the LLM to write this caption (overwrites)" onclick="llmField('summary.caption')">✨ Auto</span></span><span class="tag-edit-cue" id="ds-copy-txt" style="display:none;" title="Replace summary.caption with the image's .txt" onclick="copyTxtToSummary()">📋 Copy from .txt</span></div>
               <textarea id="sum-caption" rows="3" placeholder="Full scene atmosphere, camera, lighting..." oninput="updateSummaryField('caption', this.value)"></textarea>
             </div>
             <div class="form-group">
-              <div class="field-header"><label>summary.meta (Style / Genre)</label><span style="display:flex; gap:8px;"><span class="tag-edit-cue" id="ds-apply-meta" style="display:none;" title="Copy this summary.meta to every image's JSON in the dataset" onclick="applyMetaToDataset()">📚 Apply to dataset</span><span class="tag-edit-cue" onclick="toggleFullListEdit('summary.meta')">✏️ Edit Text</span></span></div>
+              <div class="field-header"><label>summary.meta (Style / Genre)</label><span style="display:flex; gap:8px;"><span class="tag-edit-cue" title="Ask the LLM for these tags (overwrites)" onclick="llmField('summary.meta')">✨ Auto</span><span class="tag-edit-cue" id="ds-apply-meta" style="display:none;" title="Copy this summary.meta to every image's JSON in the dataset" onclick="applyMetaToDataset()">📚 Apply to dataset</span><span class="tag-edit-cue" onclick="toggleFullListEdit('summary.meta')">✏️ Edit Text</span></span></div>
               <div id="tag-wrap-summary-meta"></div>
             </div>
             <div class="form-group">
-              <div class="field-header"><label>summary.palette (Color Swatches)</label><span class="tag-edit-cue" onclick="toggleFullListEdit('summary.palette')">✏️ Edit Text</span></div>
+              <div class="field-header"><label>summary.palette (Color Swatches)</label><span style="display:flex; gap:8px;"><span class="tag-edit-cue" title="Ask the LLM for the dominant colors (overwrites)" onclick="llmField('summary.palette')">✨ Auto</span><span class="tag-edit-cue" onclick="toggleFullListEdit('summary.palette')">✏️ Edit Text</span></span></div>
               <div id="tag-wrap-summary-palette"></div>
             </div>
           </div>
@@ -197,6 +209,7 @@
   <script src="importer.js"></script>
   <script src="dataset.js"></script>
   <script src="crop.js"></script>
+  <script src="llm.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

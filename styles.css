@@ -183,3 +183,16 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 #crop-svg .crop-dim { fill: rgba(0,0,0,0.6); pointer-events: none; }
 #crop-svg .crop-frame { fill: transparent; stroke: #10b981; stroke-width: calc(2px * var(--px, 1)); stroke-dasharray: calc(6px * var(--px, 1)) calc(4px * var(--px, 1)); pointer-events: all; cursor: move; }
 #crop-svg .handle { fill: #fff; stroke: #090d16; stroke-width: 1.5px; pointer-events: none; }
+
+/* ---- LLM auto-caption ---- */
+.llm-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.llm-row input[type=text] { flex: 1; min-width: 140px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font-family: var(--font-mono); font-size: 0.7rem; }
+.llm-status { font-size: 0.68rem; font-family: var(--font-mono); color: var(--text-muted); margin-left: auto; }
+.llm-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: none; align-items: center; justify-content: center; }
+.llm-dialog { width: min(900px, 92vw); max-height: 90vh; overflow: auto; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.llm-dialog h3 { margin: 0 0 4px; }
+.llm-dialog label { font-size: 0.72rem; font-weight: 600; margin-top: 6px; }
+.llm-dialog textarea { width: 100%; box-sizing: border-box; resize: vertical; white-space: pre; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 6px; font-family: var(--font-mono); font-size: 0.72rem; }
+.llm-hint { font-size: 0.7rem; color: var(--text-muted); margin: 0; }
+.llm-spinner { width: 12px; height: 12px; margin-left: 8px; border: 2px solid var(--border); border-top-color: var(--border-focus); border-radius: 50%; animation: llm-spin 0.8s linear infinite; }
+@keyframes llm-spin { to { transform: rotate(360deg); } }

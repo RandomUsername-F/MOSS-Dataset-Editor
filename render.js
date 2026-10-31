@@ -171,11 +171,11 @@ function renderSidebarList() {
             <textarea rows="2" class="textarea-literal-text" placeholder="Exact wording..." ${dis} oninput="updateItemField(${idx}, 'text', this.value)">${escapeHtml(item.text || '')}</textarea>
           </div>` : ''}
           <div class="form-group">
-            <label>caption (Visual Description)</label>
+            <div class="field-header"><label>caption (Visual Description)</label>${locked ? '' : `<span class="tag-edit-cue" title="Ask the LLM to write this caption (overwrites)" onclick="llmField('item.${idx}.caption')">✨ Auto</span>`}</div>
             <textarea rows="2" placeholder="Describe appearance, posture..." ${dis} oninput="updateItemField(${idx}, 'caption', this.value)">${escapeHtml(item.caption)}</textarea>
           </div>
           <div class="form-group">
-            <div class="field-header"><label>tags</label>${locked ? '' : `<span class="tag-edit-cue" onclick="toggleFullListEdit('item.${idx}.tags')">✏️ Edit Text</span>`}</div>
+            <div class="field-header"><label>tags</label>${locked ? '' : `<span style="display:flex; gap:8px;"><span class="tag-edit-cue" title="Ask the LLM for these tags (overwrites)" onclick="llmField('item.${idx}.tags')">✨ Auto</span><span class="tag-edit-cue" onclick="toggleFullListEdit('item.${idx}.tags')">✏️ Edit Text</span></span>`}</div>
             <div id="tag-wrap-item-${idx}"></div>
           </div>
         </div>`;

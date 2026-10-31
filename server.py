@@ -276,6 +276,27 @@ def crop_image():
     return jsonify(ok=True, width=w, height=h)
 
 
+@app.post('/api/llm')
+def llm_proxy():
+    """Forward a chat-completions request to the LLM server (the browser would hit CORS limits)."""
+    import socket, urllib.error, urllib.request
+    j = request.get_json(silent=True) or {}
+    url = str(j.get('url', ''))
+    if not url.startswith(('http://', 'https://')):
+        return jsonify(error='Invalid LLM server address'), 400
+    secs = max(1.0, float(j.get('timeout') or 30))
+    req = urllib.request.Request(url, data=json.dumps(j.get('body', {})).encode('utf-8'), headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=secs) as r:
+            return app.response_class(r.read(), mimetype='application/json')
+    except urllib.error.HTTPError as e:
+        return jsonify(error=f'LLM server returned {e.code}: {e.read()[:300].decode("utf-8", "replace")}'), 502
+    except Exception as e:
+        if isinstance(e, (socket.timeout, TimeoutError)) or isinstance(getattr(e, 'reason', None), (socket.timeout, TimeoutError)):
+            return jsonify(error=f'The LLM did not respond within {secs:g} s. Increase the timeout in the request settings.'), 504
+        return jsonify(error=f'LLM request failed: {e}'), 502
+
+
 def write_json(path, obj):
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
@@ -338,7 +359,29 @@ def static_files(name):
     return send_from_directory(BASE, name)
 
 
+RELOAD_CODE = 3  # exit code of the server process that asks the launcher to start a fresh one
+
+
+def watch_reload_key():
+    """Windows console: Ctrl+R restarts the server so edited files on disk are picked up."""
+    import msvcrt
+    while True:
+        if msvcrt.kbhit() and msvcrt.getwch() == '\x12':
+            print('\nReloading server from disk...', flush=True)
+            clear_thumbs()
+            os._exit(RELOAD_CODE)
+        time.sleep(0.1)
+
+
 if __name__ == '__main__':
+    if os.environ.get('MOSS_CHILD') != '1':  # launcher: runs the real server and restarts it on Ctrl+R
+        try:
+            while subprocess.run([sys.executable, os.path.abspath(__file__), *sys.argv[1:]],
+                                 env={**os.environ, 'MOSS_CHILD': '1'}).returncode == RELOAD_CODE:
+                print('--- Server restarted ---', flush=True)
+        except KeyboardInterrupt:
+            pass
+        sys.exit(0)
     clear_thumbs()  # also removes leftovers from a previous crash
     atexit.register(clear_thumbs)
     for sig in ('SIGTERM', 'SIGBREAK'):  # SIGBREAK = Ctrl+Break on Windows
@@ -348,5 +391,7 @@ if __name__ == '__main__':
     ap.add_argument('--port', type=int, default=5000)
     port = ap.parse_args().port
     url = f'http://127.0.0.1:{port}'
-    print(f'MOSS-BBox-Editor running at {url}  (Ctrl+C to stop)')
+    print(f'MOSS-BBox-Editor running at {url}  (Ctrl+R to reload, Ctrl+C to stop)')
+    if os.name == 'nt' and sys.stdin and sys.stdin.isatty():
+        threading.Thread(target=watch_reload_key, daemon=True).start()
     app.run('127.0.0.1', port, threaded=True)
