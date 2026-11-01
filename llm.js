@@ -14,19 +14,19 @@ const LLM_DEFAULT_PROMPTS = {
   bbox_scale: 1000, // 1000 = coordinates normalized to 0-1000, 0 = pixels of the image that is sent
   max_image_side: 1280,
   detect: 'Detect every distinct character (person or creature), object and visible text region in this {{width}}x{{height}} image. Return ONLY a JSON array: [{"label":"character|object|text","bbox":[x1,y1,x2,y2],"text":"literal text, only when label is text"}]. Coordinates are integers; x1,y1 is the top-left corner and x2,y2 the bottom-right corner.',
-  scene_caption: 'Write one comprehensive paragraph describing the whole image: subject, atmosphere, visual style (for example photorealistic, anime, watercolor), camera, lighting and composition. Already annotated context (keep it consistent):\n{{context}}\nOutput only the description.',
+  scene_caption: 'Write one comprehensive paragraph describing the whole image as a scene: overall subject and what happens, atmosphere, visual style (for example photorealistic, anime, watercolor), camera perspective and framing, lighting and composition. The characters, objects and text listed in the context are annotated separately with their own detailed captions, so mention them only briefly (what they are and where they are or how they relate) and do not describe their appearance in detail or repeat their captions. Already annotated context (keep it consistent):\n{{context}}\nOutput only the description.',
   scene_tags: 'List 1-3 tags for the medium or format of this image only (for example: photograph, illustration, poster, 3D render, screenshot). Do not include visual styles such as photorealistic, anime or watercolor. Context:\n{{context}}\nReturn ONLY a JSON array of strings.',
   palette: 'List the 5 dominant colors of this image as hex codes. Return ONLY a JSON array such as ["#aabbcc"].',
-  item_caption: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to caption. Write the caption of the {{label}} in image 2: appearance, posture and details, describing strictly what is visible inside image 2. Do not describe or mention the surroundings, the rest of the scene or other elements. Use the full scene only to understand what the {{label}} is. Start directly with the subject (for example "A woman in a red coat holding an umbrella") and never mention "image", "crop", "target" or "element". Element data:\n{{target}}\nScene context, for reference only (never describe it):\n{{context}}\nOutput only the caption text.',
-  item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.'
+  item_caption: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to caption. Describe only what is visible on the {{label}} itself: appearance, shape, colors, materials, clothing, pose and details. Do not describe perspective, camera angle, framing, cropping, scene lighting or composition, and never use phrases such as "close-up", "cropped", "partial view" or "in the image": those belong to the scene caption, not to an element. Do not describe the surroundings or other elements. The scene caption in the context already covers the overall scene: do not copy or paraphrase its sentences, write the caption from what you see in image 2. Start directly with the subject (for example "A woman in a red coat holding an umbrella") and never mention "image", "crop", "target" or "element". Element data:\n{{target}}\nScene context, for reference only (never copy it):\n{{context}}\nOutput only the caption text.',
+  item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Do not use tags about perspective, framing or camera (such as close-up). Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.'
 };
 
 const llmCfg = (() => { try { return JSON.parse(localStorage.getItem('llm_cfg')) || {}; } catch { return {}; } })();
 llmCfg.url ||= LLM_DEFAULT_URL;
 llmCfg.template ||= clone(LLM_DEFAULT_TEMPLATE);
-if (llmCfg.v !== 5) { // v5: scene tags are medium-only; item requests send the full image plus the crop
+if (llmCfg.v !== 6) { // v6: box prompts avoid perspective and scene-caption duplication
   llmCfg.prompts = {};
-  llmCfg.v = 5;
+  llmCfg.v = 6;
   if (!JSON.stringify(llmCfg.template).includes('{{crop}}')) llmCfg.template.messages?.findLast(m => Array.isArray(m.content))?.content.push({ type: 'image_url', image_url: { url: '{{crop}}' } });
 }
 llmCfg.prompts = { ...LLM_DEFAULT_PROMPTS, ...llmCfg.prompts };
@@ -34,6 +34,10 @@ llmCfg.timeout ||= 30;
 const llmSave = () => { try { localStorage.setItem('llm_cfg', JSON.stringify(llmCfg)); } catch { /* storage unavailable */ } };
 $('llm-url').value = llmCfg.url;
 $('llm-url').onchange = e => { llmCfg.url = e.target.value.trim() || LLM_DEFAULT_URL; llmSave(); };
+$('llm-hint').checked = !!llmCfg.hint;
+$('llm-hint').onchange = e => { llmCfg.hint = e.target.checked; llmSave(); };
+// Hint: the companion field (tags for a caption request, caption for a tags request) is added as extra context
+const llmHint = (what, val) => (llmCfg.hint && val?.length) ? `Existing ${what} (hint only, keep your answer consistent with it): ${JSON.stringify(val)}` : '';
 
 /* ---- Request building ---- */
 const fillText = (s, v) => s.replace(/\{\{(\w+)\}\}/g, (m, k) => v[k] ?? m);
@@ -43,7 +47,8 @@ const fillDeep = (o, v) => typeof o === 'string' ? fillText(o, v)
 
 function llmBody(task, vars, image, cfg = llmCfg, crop) {
   const p = cfg.prompts;
-  return fillDeep(cfg.template, { system: p.system, prompt: fillText(p[task], { width: sceneData.width, height: sceneData.height, ...vars }), image, crop });
+  const prompt = fillText(p[task], { width: sceneData.width, height: sceneData.height, ...vars });
+  return fillDeep(cfg.template, { system: p.system, prompt: vars.hint && !p[task].includes('{{hint}}') ? `${prompt}\n\n${vars.hint}` : prompt, image, crop });
 }
 
 let llmBusy = false, llmCur = { w: 1, h: 1 }; // llmCur = size of the image being sent
@@ -66,10 +71,10 @@ function llmElem(it) {
   return o;
 }
 
-function llmContext(skip) { // summary + other objects/characters/text boxes
+function llmContext(skip, withScene = true) { // summary + other objects/characters/text boxes (withScene=false for scene-level requests)
   const s = sceneData.summary, o = {};
-  if (s.caption) o.scene_caption = s.caption;
-  if (s.meta.length) o.scene_tags = s.meta;
+  if (withScene && s.caption) o.scene_caption = s.caption;
+  if (withScene && s.meta.length) o.scene_tags = s.meta;
   const els = sceneData.items.filter(i => i !== skip).map(llmElem);
   if (els.length) o.elements = els;
   return JSON.stringify(o);
@@ -120,12 +125,12 @@ async function llmAsk(task, vars, img, crop) {
 const llmSet = fn => { recordState(); fn(); renderAll(); };
 
 async function llmSummaryCaption(img, alive) {
-  const t = await llmAsk('scene_caption', { context: llmContext() }, img);
+  const t = await llmAsk('scene_caption', { context: llmContext(null, false), hint: llmHint('medium tags of this image', sceneData.summary.meta) }, img);
   alive();
   llmSet(() => { sceneData.summary.caption = t; });
 }
 async function llmSummaryTags(img, alive) {
-  const list = llmList(await llmAsk('scene_tags', { context: llmContext() }, img));
+  const list = llmList(await llmAsk('scene_tags', { context: llmContext(null, false), hint: llmHint('caption of this image', sceneData.summary.caption) }, img));
   alive();
   llmSet(() => { sceneData.summary.meta = list; });
 }
@@ -137,12 +142,12 @@ async function llmPalette(img, alive) {
 }
 const llmTarget = it => JSON.stringify((({ caption, tags, bbox, ...rest }) => rest)(llmElem(it)));
 async function llmItemCaption(it, img, alive) {
-  const t = llmStripLead(await llmAsk('item_caption', { label: it.label, target: llmTarget(it), context: llmContext(it) }, img, llmCrop(it, img)));
+  const t = llmStripLead(await llmAsk('item_caption', { label: it.label, target: llmTarget(it), context: llmContext(it), hint: llmHint('tags of this element', it.tags) }, img, llmCrop(it, img)));
   alive();
   if (sceneData.items.includes(it)) llmSet(() => { it.caption = t; });
 }
 async function llmItemTags(it, img, alive) {
-  const list = llmList(await llmAsk('item_tags', { label: it.label, target: llmTarget(it), context: llmContext(it) }, img, llmCrop(it, img)));
+  const list = llmList(await llmAsk('item_tags', { label: it.label, target: llmTarget(it), context: llmContext(it), hint: llmHint('caption of this element', it.caption) }, img, llmCrop(it, img)));
   alive();
   if (sceneData.items.includes(it)) llmSet(() => { it.tags = list; });
 }
@@ -252,7 +257,7 @@ function llmRead() {
 function llmPreviewItem(cfg) {
   const it = sceneData.items[0];
   if (!it) return '';
-  const body = llmBody('item_caption', { label: it.label, target: llmTarget(it), context: llmContext(it) }, 'data:image/jpeg;base64,<full image data>', cfg, 'data:image/jpeg;base64,<crop data>');
+  const body = llmBody('item_caption', { label: it.label, target: llmTarget(it), context: llmContext(it), hint: llmHint('tags of this element', it.tags) }, 'data:image/jpeg;base64,<full image data>', cfg, 'data:image/jpeg;base64,<crop data>');
   return `\n\n----- element caption (first box) -----\n${JSON.stringify(body, null, 2)}`;
 }
 
@@ -261,7 +266,7 @@ function llmPreview() {
     const cfg = llmRead(), saved = llmCfg.prompts;
     llmCfg.prompts = cfg.prompts; // llmBox/llmContext read the prompts settings
     llmCur = { w: sceneData.width, h: sceneData.height };
-    try { $('llm-prev').value = `POST ${cfg.url} (timeout ${cfg.timeout} s)\n\n${JSON.stringify(llmBody('scene_caption', { context: llmContext() }, 'data:image/jpeg;base64,<image data>', cfg), null, 2)}${llmPreviewItem(cfg)}`; }
+    try { $('llm-prev').value = `POST ${cfg.url} (timeout ${cfg.timeout} s)\n\n${JSON.stringify(llmBody('scene_caption', { context: llmContext(null, false), hint: llmHint('medium tags of this image', sceneData.summary.meta) }, 'data:image/jpeg;base64,<image data>', cfg), null, 2)}${llmPreviewItem(cfg)}`; }
     finally { llmCfg.prompts = saved; }
   } catch (e) { $('llm-prev').value = '⚠ ' + e.message; }
 }

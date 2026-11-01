@@ -145,6 +145,7 @@
             <div class="llm-row">
               <button class="btn" title="Detect boxes, then caption and tag the scene and every new box" onclick="llmFull()">✨ Boxes + Caption + Tags</button>
               <button class="btn" title="Caption and tag only existing elements that are empty" onclick="llmEmpty()">✨ Fill empty elements</button>
+              <label class="btn" title="Send the companion field as extra context: tags when asking for a caption, caption when asking for tags"><input type="checkbox" id="llm-hint"> Hint</label>
               <input id="llm-url" type="text" spellcheck="false" title="LLM server address (OpenAI-compatible chat completions)" placeholder="http://localhost:1234/v1/chat/completions">
               <button class="btn btn-icon" title="Request settings" onclick="llmOpenSettings()">⚙️</button>
             </div>
