@@ -88,6 +88,11 @@
       <input type="file" id="file-loader" accept="image/*,.json,.txt" style="display:none;" onchange="loadFromFile(event)">
       <button class="btn" title="Pick a folder of images (needs server.py)" onclick="loadDataset()">🗂️ Load Dataset</button>
       <label class="btn" title="Include images in subfolders"><input type="checkbox" id="ds-recursive"> Load subfolders</label>
+      <div class="json-box" title="Compiled MOSS-Image JSON"><span class="toolbar-label">JSON</span>
+        <label class="btn" title="Auto compile: saves compiled JSON and compiles drafts when an image is loaded. A compiled file stays compiled while editing; decompiling is manual only."><input type="checkbox" id="ds-compiled"> Auto</label>
+        <button class="btn" title="Compile this image's JSON now" onclick="dsCompileNow()">Compile</button>
+        <button class="btn" title="Convert this image's JSON back to the editable draft" onclick="dsDecompileNow()">Decompile</button>
+      </div>
       <button class="btn" style="background:#10b981; border-color:#059669; color:#fff;" onclick="copyFinalJson()">📋 Copy Final JSON</button>
     </div>
   </header>
@@ -145,7 +150,7 @@
             <div class="llm-row">
               <button class="btn" title="Detect boxes, then caption and tag the scene and every new box" onclick="llmFull()">✨ Boxes + Caption + Tags</button>
               <button class="btn" title="Caption and tag only existing elements that are empty" onclick="llmEmpty()">✨ Fill empty elements</button>
-              <label class="btn" title="Send the companion field as extra context: tags when asking for a caption, caption when asking for tags"><input type="checkbox" id="llm-hint"> Hint</label>
+              
               <input id="llm-url" type="text" spellcheck="false" title="LLM server address (OpenAI-compatible chat completions)" placeholder="http://localhost:1234/v1/chat/completions">
               <button class="btn btn-icon" title="Request settings" onclick="llmOpenSettings()">⚙️</button>
             </div>

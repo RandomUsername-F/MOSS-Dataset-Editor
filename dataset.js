@@ -16,7 +16,79 @@ const dsQuery = i => `v=${ds.version}&i=${i}`;
 const dsStatus = t => { $('ds-status').textContent = t; };
 // The editor canvas uses the exact image size, but a saved layout must use multiples of 16 (MOSS-Image Layout rule).
 const dsRound16 = v => Math.max(16, Math.round(v / 16) * 16);
-const dsSerialize = () => JSON.stringify({ ...sceneData, width: dsRound16(sceneData.width), height: dsRound16(sceneData.height) }, null, 2);
+const dsDraft = () => ({ ...sceneData, width: dsRound16(sceneData.width), height: dsRound16(sceneData.height) });
+const dsSerialize = () => { // compiled when Auto is on or the file is already compiled (it never decompiles by itself), else the draft
+  const draft = dsDraft();
+  ds.fallback = '';
+  ds.outCompiled = false;
+  if ($('ds-compiled').checked || ds.compiled) {
+    try { ds.outCompiled = true; return dsCompile(draft) + '\n'; } catch (e) { ds.fallback = e.message; ds.outCompiled = false; } // not compilable: keep the draft so no edit is lost
+  }
+  return JSON.stringify(draft, null, 2);
+};
+
+function dsCompile(d) { // port of compile_prompt.py (dataset-image-annotator skill)
+  const need = (ok, msg) => { if (!ok) throw new Error(msg); };
+  const txt = (v, loc) => need(typeof v === 'string' && v.trim() !== '', `${loc} is empty`);
+  const strs = (v, loc) => { need(Array.isArray(v), `${loc} must be a list`); v.forEach((s, i) => txt(s, `${loc} #${i + 1}`)); };
+  const { width: W, height: H, summary: s, items } = d;
+  txt(s.caption, 'summary caption');
+  for (const k of ['meta', 'palette']) if (s[k] !== undefined) strs(s[k], `summary ${k}`);
+  need(Array.isArray(items) && items.length > 0, 'no boxes');
+  const out = items.map((it, i) => {
+    const loc = `box ${i + 1}`;
+    need(['object', 'character', 'text'].includes(it.label), `${loc} has an invalid label`);
+    txt(it.caption, `${loc} caption`);
+    if (it.label === 'text') need(it.text !== undefined, `${loc} text is missing`);
+    if (it.text !== undefined) txt(it.text, `${loc} text`);
+    for (const k of ['tags', 'palette']) if (it[k] !== undefined) strs(it[k], `${loc} ${k}`);
+    const [x1, y1, x2, y2] = it.bbox;
+    need(x1 < x2 && y1 < y2 && x1 >= 0 && y1 >= 0 && x2 <= W && y2 <= H, `${loc} is outside the ${W}x${H} canvas`);
+    const cy = Math.floor(H / 2), cx = Math.floor(W / 2);
+    return { ...it, bbox: [Math.floor(y1) - cy, Math.floor(x1) - cx, Math.ceil(y2) - cy, Math.ceil(x2) - cx] };
+  });
+  return JSON.stringify({ summary: s, items: out, bbox_coord_space: 'abs_centralized', bbox_format: 'yxyx' });
+}
+
+function dsDecompile(j, imgW, imgH) { // compiled file -> editable draft (canvas = image size rounded to 16)
+  const W = dsRound16(imgW), H = dsRound16(imgH), cx = Math.floor(W / 2), cy = Math.floor(H / 2);
+  return { width: W, height: H, bbox_coord_space: 'abs', bbox_format: 'xyxy', summary: j.summary, items: j.items.map(it => { const [y1, x1, y2, x2] = it.bbox; return { ...it, bbox: [x1 + cx, y1 + cy, x2 + cx, y2 + cy] }; }) };
+}
+try { $('ds-compiled').checked = localStorage.getItem('ds_compiled') === '1'; } catch { /* storage unavailable */ }
+$('ds-compiled').onchange = e => {
+  try { localStorage.setItem('ds_compiled', e.target.checked ? '1' : '0'); } catch { /* storage unavailable */ }
+  if (e.target.checked && ds.active && !ds.loading && !ds.readOnly) { ds.lastSaved = ''; datasetSaveSoon(); } // re-save the open image in the new format
+};
+// Compile notices: a large box at the top right of the canvas. It does not expire; click it or change image to dismiss.
+function dsNotice(text, kind = 'warn') {
+  let el = $('ds-notice');
+  if (!el) {
+    el = Object.assign(document.createElement('div'), { id: 'ds-notice' });
+    el.onclick = dsNoticeClear;
+    el.addEventListener('mousedown', e => e.stopPropagation()); // do not start a pan or marquee underneath
+    $('viewport').appendChild(el);
+  }
+  el.className = `ds-notice ${kind}`;
+  el.innerHTML = `${escapeHtml(text)}<small>Click to dismiss</small>`;
+  ds.noticeKind = kind;
+}
+function dsNoticeClear() { $('ds-notice')?.remove(); ds.noticeKind = ''; }
+
+const dsReady = () => ds.active && !ds.loading && !ds.readOnly && ds.index >= 0;
+function dsCompileNow() { // manual: compile this image's JSON now
+  if (!dsReady()) return showToast('⚠️ Open a dataset image first.', 'warn');
+  try { dsCompile(dsDraft()); } catch (e) { return dsNotice(`Not compiled: ${e.message}`, 'warn'); }
+  ds.compiled = true; // from now on this file stays compiled while editing
+  ds.lastSaved = '';
+  datasetSaveSoon();
+  dsNotice('Compiled.', 'ok');
+}
+function dsDecompileNow() { // manual only: write this image's JSON back as the editable draft
+  if (!dsReady()) return showToast('⚠️ Open a dataset image first.', 'warn');
+  ds.pending = { i: ds.index, v: ds.version, body: JSON.stringify(dsDraft(), null, 2), note: '', compiled: false };
+  flushSave();
+  dsNotice($('ds-compiled').checked ? 'Decompiled. Auto is on, so the next edit compiles it again.' : 'Decompiled to the editable draft.', 'ok');
+}
 const dsInfo = () => { $('ds-info').textContent = ds.filtered ? `${ds.count} / ${ds.total} images` : `${ds.total} images`; };
 
 /* ---- Loading ---- */
@@ -109,6 +181,7 @@ async function selectDatasetImage(i, pos) {
   if (!ds.active || i < 0 || i >= ds.total || i === ds.index) return;
   await flushSave();
   cancelCrop();
+  dsNoticeClear();
   const token = ++ds.token;
   ds.loading = true;
   ds.index = i;
@@ -125,7 +198,9 @@ async function selectDatasetImage(i, pos) {
     let schema = null;
     ds.readOnly = false;
     if (side.exists) {
-      schema = side.invalid ? null : (Array.isArray(side.json?.items) ? side.json : deepSearchSchema(side.json));
+      const json = Array.isArray(side.json?.items) && side.json.bbox_coord_space === 'abs_centralized'
+        ? dsDecompile(side.json, img.naturalWidth, img.naturalHeight) : side.json; // compiled files are decompiled for editing
+      schema = side.invalid ? null : (Array.isArray(json?.items) ? json : deepSearchSchema(json));
       if (!schema) { ds.readOnly = true; showToast('⚠️ Existing JSON is not a valid schema. Autosave disabled for this image.', 'warn'); }
     }
     const W = img.naturalWidth, H = img.naturalHeight;
@@ -143,7 +218,13 @@ async function selectDatasetImage(i, pos) {
     $('txt-caption').value = side.txt ?? '';
 
     dsWarnDims(W, H, true);
+    const wasCompiled = side.json?.bbox_coord_space === 'abs_centralized';
+    ds.compiled = wasCompiled; // a compiled file stays compiled while editing
     ds.lastSaved = side.exists ? dsSerialize() : '';
+    if ($('ds-compiled').checked && side.exists && !wasCompiled && !ds.readOnly) { // compile mode: try to compile drafts on load
+      if (ds.fallback) dsNotice(`Not compiled: ${ds.fallback}`, 'warn'); // stays a draft until fixed
+      else { ds.lastSaved = ''; dsNotice('Converted to compiled JSON.', 'ok'); } // the save after loading writes it
+    }
     dsStatus(side.exists ? '' : '+ new JSON');
   } catch (e) { showToast('⚠️ ' + e.message, 'warn'); }
   finally {
@@ -225,7 +306,7 @@ function datasetSaveSoon() {
   if (!ds.active || ds.loading || ds.readOnly || ds.index < 0) return;
   const body = dsSerialize(); // editor-only flags are non-enumerable; hidden boxes are kept
   if (body === ds.lastSaved || body === ds.pending?.body) return;
-  ds.pending = { i: ds.index, v: ds.version, body };
+  ds.pending = { i: ds.index, v: ds.version, body, note: ds.fallback, compiled: ds.outCompiled };
   dsStatus('● editing');
   clearTimeout(ds.timer);
   ds.timer = setTimeout(flushSave, 300);
@@ -239,7 +320,13 @@ function flushSave() {
   ds.saving = ds.saving.then(async () => {
     try {
       await api(`/api/json?v=${p.v}&i=${p.i}`, { ...jsonOpts('PUT', p.body), keepalive: p.body.length < 60000 });
-      if (p.i === ds.index && p.v === ds.version) { ds.lastSaved = p.body; dsStatus('✔ saved'); }
+      if (p.i === ds.index && p.v === ds.version) {
+        ds.lastSaved = p.body;
+        ds.compiled = p.compiled;
+        dsStatus(p.note ? '⚠ saved as draft' : '✔ saved');
+        if (p.note) dsNotice(`Not compiled, saved as draft: ${p.note}`, 'warn');
+        else if (ds.noticeKind === 'warn') dsNoticeClear();
+      }
     } catch (e) { dsStatus('✖ save failed'); showToast('⚠️ Save failed: ' + e.message, 'warn'); }
   });
   return ds.saving;

@@ -196,3 +196,21 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 .llm-hint { font-size: 0.7rem; color: var(--text-muted); margin: 0; }
 .llm-spinner { width: 12px; height: 12px; margin-left: 8px; border: 2px solid var(--border); border-top-color: var(--border-focus); border-radius: 50%; animation: llm-spin 0.8s linear infinite; }
 @keyframes llm-spin { to { transform: rotate(360deg); } }
+
+/* ---- Better visibility of buttons and labels ---- */
+label, .toolbar-label { font-size: 0.72rem; color: color-mix(in srgb, var(--text-main) 85%, var(--text-muted)); }
+.btn { font-size: 0.8rem; border-color: color-mix(in srgb, var(--text-main) 30%, var(--border)); background: color-mix(in srgb, var(--text-main) 6%, var(--bg-card)); }
+.btn:hover:not(:disabled) { border-color: var(--text-main); }
+.tag-edit-cue { font-size: 0.76rem; font-weight: 600; color: var(--text-main); background: rgba(56,189,248,0.18); border: 1px solid rgba(56,189,248,0.6); }
+.tag-edit-cue:hover { background: rgba(56,189,248,0.34); }
+.tab-btn { font-size: 0.85rem; color: color-mix(in srgb, var(--text-main) 75%, var(--text-muted)); }
+.action-btn { opacity: 0.95; }
+.ds-head, .crop-note { color: color-mix(in srgb, var(--text-main) 80%, var(--text-muted)); }
+
+/* ---- Compile notice (top right of the canvas) ---- */
+.ds-notice { position: absolute; top: 12px; right: 12px; z-index: 30; max-width: min(460px, 60%); padding: 12px 16px; border-radius: 8px; font-size: 1.05rem; font-weight: 600; line-height: 1.35; color: #fff; background: #b45309; border: 1px solid #f59e0b; box-shadow: 0 6px 24px rgba(0,0,0,0.5); cursor: pointer; }
+.ds-notice.ok { background: #047857; border-color: #10b981; }
+.ds-notice small { display: block; margin-top: 4px; font-size: 0.72rem; font-weight: 500; opacity: 0.85; }
+
+/* ---- JSON box in the header (Auto / Compile / Decompile) ---- */
+.json-box { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--text-main) 35%, var(--border)); border-radius: 6px; background: color-mix(in srgb, var(--text-main) 4%, transparent); }

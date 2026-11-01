@@ -300,7 +300,11 @@ def llm_proxy():
 def write_json(path, obj):
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
-        json.dump(obj, f, indent=2, ensure_ascii=False)
+        if obj.get('bbox_coord_space') == 'abs_centralized':  # compiled files stay compact
+            json.dump(obj, f, separators=(',', ':'), ensure_ascii=False)
+            f.write('\n')
+        else:
+            json.dump(obj, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)
 
 

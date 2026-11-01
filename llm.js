@@ -18,7 +18,8 @@ const LLM_DEFAULT_PROMPTS = {
   scene_tags: 'List 1-3 tags for the medium or format of this image only (for example: photograph, illustration, poster, 3D render, screenshot). Do not include visual styles such as photorealistic, anime or watercolor. Context:\n{{context}}\nReturn ONLY a JSON array of strings.',
   palette: 'List the 5 dominant colors of this image as hex codes. Return ONLY a JSON array such as ["#aabbcc"].',
   item_caption: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to caption. Describe only what is visible on the {{label}} itself: appearance, shape, colors, materials, clothing, pose and details. Do not describe perspective, camera angle, framing, cropping, scene lighting or composition, and never use phrases such as "close-up", "cropped", "partial view" or "in the image": those belong to the scene caption, not to an element. Do not describe the surroundings or other elements. The scene caption in the context already covers the overall scene: do not copy or paraphrase its sentences, write the caption from what you see in image 2. Start directly with the subject (for example "A woman in a red coat holding an umbrella") and never mention "image", "crop", "target" or "element". Element data:\n{{target}}\nScene context, for reference only (never copy it):\n{{context}}\nOutput only the caption text.',
-  item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Do not use tags about perspective, framing or camera (such as close-up). Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.'
+  item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Do not use tags about perspective, framing or camera (such as close-up). Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.',
+  review: 'Review a response against the instructions it was given. You also get the same image(s). Instructions:\n"""\n{{instructions}}\n"""\nResponse:\n"""\n{{response}}\n"""\nDoes the response follow ALL of the instructions (required format, content limits, forbidden phrases and topics)? Return ONLY JSON: {"ok": true or false, "issues": "short list of the violated instructions, empty when ok"}.'
 };
 
 const llmCfg = (() => { try { return JSON.parse(localStorage.getItem('llm_cfg')) || {}; } catch { return {}; } })();
@@ -31,12 +32,12 @@ if (llmCfg.v !== 6) { // v6: box prompts avoid perspective and scene-caption dup
 }
 llmCfg.prompts = { ...LLM_DEFAULT_PROMPTS, ...llmCfg.prompts };
 llmCfg.timeout ||= 30;
+llmCfg.retries ??= 2;
 const llmSave = () => { try { localStorage.setItem('llm_cfg', JSON.stringify(llmCfg)); } catch { /* storage unavailable */ } };
 $('llm-url').value = llmCfg.url;
 $('llm-url').onchange = e => { llmCfg.url = e.target.value.trim() || LLM_DEFAULT_URL; llmSave(); };
-$('llm-hint').checked = !!llmCfg.hint;
-$('llm-hint').onchange = e => { llmCfg.hint = e.target.checked; llmSave(); };
 // Hint: the companion field (tags for a caption request, caption for a tags request) is added as extra context
+// (toggle: LLM request settings popup)
 const llmHint = (what, val) => (llmCfg.hint && val?.length) ? `Existing ${what} (hint only, keep your answer consistent with it): ${JSON.stringify(val)}` : '';
 
 /* ---- Request building ---- */
@@ -44,6 +45,11 @@ const fillText = (s, v) => s.replace(/\{\{(\w+)\}\}/g, (m, k) => v[k] ?? m);
 const fillDeep = (o, v) => typeof o === 'string' ? fillText(o, v)
   : Array.isArray(o) ? o.filter(x => v.crop !== undefined || !(x === '{{crop}}' || x?.image_url?.url === '{{crop}}')).map(x => fillDeep(x, v)) // no crop: drop the crop entry
   : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, x]) => [k, fillDeep(x, v)])) : o;
+
+function llmPrompt(task, vars) { // the exact prompt text of a task, hint included
+  const p = llmCfg.prompts[task], text = fillText(p, { width: sceneData.width, height: sceneData.height, ...vars });
+  return vars.hint && !p.includes('{{hint}}') ? `${text}\n\n${vars.hint}` : text;
+}
 
 function llmBody(task, vars, image, cfg = llmCfg, crop) {
   const p = cfg.prompts;
@@ -111,7 +117,28 @@ let llmPending = 0;
 const llmSpin = d => { llmPending += d; $('llm-spinner').style.display = llmPending > 0 ? 'inline-block' : 'none'; };
 const llmStripLead = s => { s = s.replace(/^the (target )?(element|object|character|text|subject) (here )?(is|shows|depicts|appears to be|features)\s+/i, ''); return s.charAt(0).toUpperCase() + s.slice(1); };
 
-async function llmAsk(task, vars, img, crop) {
+const LLM_REVIEWED = new Set(['scene_caption', 'scene_tags', 'item_caption', 'item_tags']);
+
+async function llmReview(task, vars, answer, img, crop) { // the model checks its own answer against the instructions
+  const r = await llmSend('review', { instructions: llmPrompt(task, vars), response: answer }, img, crop);
+  try { const v = llmJson(r); return { ok: v.ok === true || v.ok === 'true', issues: String(v.issues || '') }; } catch { return { ok: true, issues: '' }; }
+}
+
+async function llmAsk(task, vars, img, crop) { // with Auto-review: generate, review, retry up to llmCfg.retries times
+  const retries = llmCfg.review && LLM_REVIEWED.has(task) ? llmCfg.retries : 0;
+  let v = vars;
+  for (let n = 0; ; n++) {
+    const t = await llmSend(task, v, img, crop);
+    if (n >= retries) return t;
+    llmStatus('🔍 Reviewing…');
+    const verdict = await llmReview(task, vars, t, img, crop);
+    if (verdict.ok) return t;
+    llmStatus(`↻ Retry ${n + 1}/${retries}…`);
+    v = { ...vars, hint: [vars.hint, `Your previous answer was rejected by a review (${verdict.issues || 'it did not follow the instructions'}). Previous answer: "${t}". Answer again and follow every instruction.`].filter(Boolean).join('\n\n') };
+  }
+}
+
+async function llmSend(task, vars, img, crop) {
   llmSpin(1);
   try {
     const r = await api('/api/llm', jsonOpts('POST', JSON.stringify({ url: llmCfg.url, timeout: llmCfg.timeout, body: llmBody(task, vars, img.url, llmCfg, crop?.url) })));
@@ -230,18 +257,23 @@ function llmOpenSettings() {
       <h3>⚙️ LLM request settings</h3>
       <p class="llm-hint">Each request is POSTed to the server address by server.py. Template placeholders: <code>{{system}}</code> <code>{{prompt}}</code> <code>{{image}}</code> <code>{{crop}}</code> (box requests only, dropped otherwise). Prompt placeholders: <code>{{width}}</code> <code>{{height}}</code> <code>{{label}}</code> <code>{{target}}</code> <code>{{context}}</code>.</p>
       <label>Timeout (seconds to wait for each response)</label><input id="llm-timeout" type="number" min="1" step="1" style="width:90px;">
+      <label>Auto-review: the model checks each caption/tags answer against its instructions and retries when it does not comply</label>
+      <div class="llm-row"><label class="btn" style="margin:0;" title="Send the companion field as extra context: tags when asking for a caption, caption when asking for tags"><input type="checkbox" id="llm-hint"> Hint</label><label class="btn" style="margin:0;"><input type="checkbox" id="llm-review"> Auto-review</label><label style="margin:0;">Retries <input id="llm-retries" type="number" min="0" max="10" step="1" style="width:60px;"></label></div>
       <label>Request body template (JSON)</label><textarea id="llm-tpl" rows="12" spellcheck="false"></textarea>
       <label>Prompts and settings (JSON)</label><textarea id="llm-prm" rows="12" spellcheck="false"></textarea>
       <label>Preview: example requests for the scene caption and, if the image has boxes, the first box caption (image data shortened)</label>
       <textarea id="llm-prev" rows="10" readonly spellcheck="false"></textarea>
-      <div class="llm-row"><button class="btn" onclick="llmPreview()">🔄 Refresh preview</button><button class="btn" onclick="llmFill(LLM_DEFAULT_TEMPLATE, LLM_DEFAULT_PROMPTS, 30)">Reset defaults</button><span style="flex:1"></span><button class="btn" onclick="llmApply()">💾 Save</button><button class="btn" onclick="$('llm-modal').style.display='none'">Close</button></div>
+      <div class="llm-row"><button class="btn" onclick="llmPreview()">🔄 Refresh preview</button><button class="btn" onclick="llmFill(LLM_DEFAULT_TEMPLATE, LLM_DEFAULT_PROMPTS, 30, false, 2, false)">Reset defaults</button><span style="flex:1"></span><button class="btn" onclick="llmApply()">💾 Save</button><button class="btn" onclick="$('llm-modal').style.display='none'">Close</button></div>
     </div></div>`);
   }
-  llmFill(llmCfg.template, llmCfg.prompts, llmCfg.timeout);
+  llmFill(llmCfg.template, llmCfg.prompts, llmCfg.timeout, llmCfg.review, llmCfg.retries, llmCfg.hint);
   $('llm-modal').style.display = 'flex';
 }
 
-function llmFill(tpl, prm, timeout) {
+function llmFill(tpl, prm, timeout, review, retries, hint) {
+  $('llm-hint').checked = !!hint;
+  $('llm-review').checked = !!review;
+  $('llm-retries').value = retries;
   $('llm-timeout').value = timeout;
   $('llm-tpl').value = JSON.stringify(tpl, null, 2);
   $('llm-prm').value = JSON.stringify(prm, null, 2);
@@ -251,7 +283,7 @@ function llmFill(tpl, prm, timeout) {
 function llmRead() {
   const template = JSON.parse($('llm-tpl').value), prompts = JSON.parse($('llm-prm').value);
   if (!template || typeof template !== 'object' || !Array.isArray(template.messages)) throw new Error('Template must be an object with a "messages" array.');
-  return { url: $('llm-url').value, template, prompts: { ...LLM_DEFAULT_PROMPTS, ...prompts }, timeout: Math.max(1, parseFloat($('llm-timeout').value) || 30) };
+  return { url: $('llm-url').value, template, prompts: { ...LLM_DEFAULT_PROMPTS, ...prompts }, timeout: Math.max(1, parseFloat($('llm-timeout').value) || 30), hint: $('llm-hint').checked, review: $('llm-review').checked, retries: clamp(parseInt($('llm-retries').value, 10) || 0, 0, 10) };
 }
 
 function llmPreviewItem(cfg) {
@@ -263,18 +295,19 @@ function llmPreviewItem(cfg) {
 
 function llmPreview() {
   try {
-    const cfg = llmRead(), saved = llmCfg.prompts;
+    const cfg = llmRead(), saved = llmCfg.prompts, savedHint = llmCfg.hint;
+    llmCfg.hint = cfg.hint; // the preview follows the popup's current toggle
     llmCfg.prompts = cfg.prompts; // llmBox/llmContext read the prompts settings
     llmCur = { w: sceneData.width, h: sceneData.height };
     try { $('llm-prev').value = `POST ${cfg.url} (timeout ${cfg.timeout} s)\n\n${JSON.stringify(llmBody('scene_caption', { context: llmContext(null, false), hint: llmHint('medium tags of this image', sceneData.summary.meta) }, 'data:image/jpeg;base64,<image data>', cfg), null, 2)}${llmPreviewItem(cfg)}`; }
-    finally { llmCfg.prompts = saved; }
+    finally { llmCfg.prompts = saved; llmCfg.hint = savedHint; }
   } catch (e) { $('llm-prev').value = '⚠ ' + e.message; }
 }
 
 function llmApply() {
   try {
     const cfg = llmRead();
-    Object.assign(llmCfg, { template: cfg.template, prompts: cfg.prompts, timeout: cfg.timeout });
+    Object.assign(llmCfg, { template: cfg.template, prompts: cfg.prompts, timeout: cfg.timeout, hint: cfg.hint, review: cfg.review, retries: cfg.retries });
     llmSave();
     $('llm-modal').style.display = 'none';
     showToast('✅ LLM settings saved.', 'info');
