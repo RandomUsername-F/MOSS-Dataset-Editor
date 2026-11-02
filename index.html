@@ -47,8 +47,9 @@
   <div id="toast-container"></div>
 
   <header>
+  <div class="toolbar-group" style="margin-right: auto; border-color:#dbc500;">
     <div class="brand">
-      <h1>MOSS-BBox-Editor</h1>
+      <h1>MOSS-Dataset-Editor</h1>
       <div class="theme-dropdown-wrap" id="theme-dropdown-wrap">
         <button class="btn" onclick="toggleThemeMenu(event)">⚙</button>
         <div id="theme-menu" class="theme-dropdown">
@@ -59,7 +60,11 @@
         </div>
       </div>
     </div>
-
+    <button class="btn" title="Clear Canvas and Schema to Default" onclick="clearCanvasAndWorkflow()" style="color:#f87171;">🗑️ Clear</button>
+    <button class="btn" title="Save Layout JSON" onclick="saveToFile()">💾 Save</button>
+    <button class="btn" title="Load Image (ComfyUI workflow / backdrop), JSON, or TXT" onclick="$('file-loader').click()">📂 Load</button>
+    <input type="file" id="file-loader" accept="image/*,.json,.txt" style="display:none;" onchange="loadFromFile(event)">
+    <button class="btn" style="background:#10b981; border-color:#059669; color:#fff;" onclick="copyFinalJson()">📋 Copy Final JSON</button>
     <div class="toolbar-group">
       <span class="toolbar-label">Res</span>
       <select id="res-presets" onchange="applyPresetRes(this.value)" style="padding:2px 4px; font-size:0.75rem;"></select><!-- filled by buildStaticUi() -->
@@ -78,22 +83,17 @@
     <div class="toolbar-group">
       <button class="btn btn-icon" id="btn-undo" title="Undo (Ctrl+Z)" onclick="undo()">↶</button>
       <button class="btn btn-icon" id="btn-redo" title="Redo (Ctrl+Y)" onclick="redo()">↷</button>
-      <button class="btn" id="ds-crop-btn" style="display:none;" title="Crop the current image (overwrites the file)" onclick="startCrop()">✂️ Crop</button>
     </div>
-
-    <div class="toolbar-group">
-      <button class="btn" title="Clear Canvas and Schema to Default" onclick="clearCanvasAndWorkflow()" style="color:#f87171;">🗑️ Clear</button>
-      <button class="btn" title="Save Layout JSON" onclick="saveToFile()">💾 Save</button>
-      <button class="btn" title="Load Image (ComfyUI workflow / backdrop), JSON, or TXT" onclick="$('file-loader').click()">📂 Load</button>
-      <input type="file" id="file-loader" accept="image/*,.json,.txt" style="display:none;" onchange="loadFromFile(event)">
+  </div>
+    <div class="toolbar-group" style="margin-left: auto; border-color:#3edb00;">
+      <button class="btn" id="ds-crop-btn" style="display:none;" title="Crop the current image (overwrites the file)" onclick="startCrop()">✂️ Crop</button>
       <button class="btn" title="Pick a folder of images (needs server.py)" onclick="loadDataset()">🗂️ Load Dataset</button>
-      <label class="btn" title="Include images in subfolders"><input type="checkbox" id="ds-recursive"> Load subfolders</label>
+      <label class="btn" title="Include images in subfolders"><input type="checkbox" id="ds-recursive"> Subfolders</label>
       <div class="json-box" title="Compiled MOSS-Image JSON"><span class="toolbar-label">JSON</span>
         <label class="btn" title="Auto compile: saves compiled JSON and compiles drafts when an image is loaded. A compiled file stays compiled while editing; decompiling is manual only."><input type="checkbox" id="ds-compiled"> Auto</label>
         <button class="btn" title="Compile this image's JSON now" onclick="dsCompileNow()">Compile</button>
         <button class="btn" title="Convert this image's JSON back to the editable draft" onclick="dsDecompileNow()">Decompile</button>
       </div>
-      <button class="btn" style="background:#10b981; border-color:#059669; color:#fff;" onclick="copyFinalJson()">📋 Copy Final JSON</button>
     </div>
   </header>
 
