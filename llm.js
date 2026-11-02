@@ -46,15 +46,18 @@ const fillDeep = (o, v) => typeof o === 'string' ? fillText(o, v)
   : Array.isArray(o) ? o.filter(x => v.crop !== undefined || !(x === '{{crop}}' || x?.image_url?.url === '{{crop}}')).map(x => fillDeep(x, v)) // no crop: drop the crop entry
   : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, x]) => [k, fillDeep(x, v)])) : o;
 
-function llmPrompt(task, vars) { // the exact prompt text of a task, hint included
-  const p = llmCfg.prompts[task], text = fillText(p, { width: sceneData.width, height: sceneData.height, ...vars });
-  return vars.hint && !p.includes('{{hint}}') ? `${text}\n\n${vars.hint}` : text;
+function llmPrompt(task, vars, cfg = llmCfg) { // the exact prompt text of a task: special instructions and hint included
+  const p = cfg.prompts[task], extra = [];
+  const text = fillText(p, { width: sceneData.width, height: sceneData.height, special: cfg.special || '', ...vars });
+  if (task !== 'review' && cfg.special?.trim() && !p.includes('{{special}}')) extra.push(`Special instructions from the user about this dataset (always follow them):\n${cfg.special.trim()}`);
+  if (vars.hint && !p.includes('{{hint}}')) extra.push(vars.hint);
+  return [text, ...extra].join('\n\n');
 }
 
 function llmBody(task, vars, image, cfg = llmCfg, crop) {
   const p = cfg.prompts;
-  const prompt = fillText(p[task], { width: sceneData.width, height: sceneData.height, ...vars });
-  return fillDeep(cfg.template, { system: p.system, prompt: vars.hint && !p[task].includes('{{hint}}') ? `${prompt}\n\n${vars.hint}` : prompt, image, crop });
+  const prompt = llmPrompt(task, vars, cfg);
+  return fillDeep(cfg.template, { system: p.system, prompt, image, crop });
 }
 
 let llmBusy = false, llmCur = { w: 1, h: 1 }; // llmCur = size of the image being sent
@@ -256,6 +259,7 @@ function llmOpenSettings() {
     document.body.insertAdjacentHTML('beforeend', `<div id="llm-modal" class="llm-modal"><div class="llm-dialog">
       <h3>⚙️ LLM request settings</h3>
       <p class="llm-hint">Each request is POSTed to the server address by server.py. Template placeholders: <code>{{system}}</code> <code>{{prompt}}</code> <code>{{image}}</code> <code>{{crop}}</code> (box requests only, dropped otherwise). Prompt placeholders: <code>{{width}}</code> <code>{{height}}</code> <code>{{label}}</code> <code>{{target}}</code> <code>{{context}}</code>.</p>
+      <label>Special instructions (theme of the dataset or unusual concepts the model may not recognize; added to every request)</label><textarea id="llm-special" rows="4" spellcheck="false" style="white-space:pre-wrap;" placeholder="Example: This dataset shows hand-drawn tarot cards. Name the cards by their traditional titles."></textarea>
       <label>Timeout (seconds to wait for each response)</label><input id="llm-timeout" type="number" min="1" step="1" style="width:90px;">
       <label>Auto-review: the model checks each caption/tags answer against its instructions and retries when it does not comply</label>
       <div class="llm-row"><label class="btn" style="margin:0;" title="Send the companion field as extra context: tags when asking for a caption, caption when asking for tags"><input type="checkbox" id="llm-hint"> Hint</label><label class="btn" style="margin:0;"><input type="checkbox" id="llm-review"> Auto-review</label><label style="margin:0;">Retries <input id="llm-retries" type="number" min="0" max="10" step="1" style="width:60px;"></label></div>
@@ -263,14 +267,15 @@ function llmOpenSettings() {
       <label>Prompts and settings (JSON)</label><textarea id="llm-prm" rows="12" spellcheck="false"></textarea>
       <label>Preview: example requests for the scene caption and, if the image has boxes, the first box caption (image data shortened)</label>
       <textarea id="llm-prev" rows="10" readonly spellcheck="false"></textarea>
-      <div class="llm-row"><button class="btn" onclick="llmPreview()">🔄 Refresh preview</button><button class="btn" onclick="llmFill(LLM_DEFAULT_TEMPLATE, LLM_DEFAULT_PROMPTS, 30, false, 2, false)">Reset defaults</button><span style="flex:1"></span><button class="btn" onclick="llmApply()">💾 Save</button><button class="btn" onclick="$('llm-modal').style.display='none'">Close</button></div>
+      <div class="llm-row"><button class="btn" onclick="llmPreview()">🔄 Refresh preview</button><button class="btn" onclick="llmFill(LLM_DEFAULT_TEMPLATE, LLM_DEFAULT_PROMPTS, 30, false, 2, false, '')">Reset defaults</button><span style="flex:1"></span><button class="btn" onclick="llmApply()">💾 Save</button><button class="btn" onclick="$('llm-modal').style.display='none'">Close</button></div>
     </div></div>`);
   }
-  llmFill(llmCfg.template, llmCfg.prompts, llmCfg.timeout, llmCfg.review, llmCfg.retries, llmCfg.hint);
+  llmFill(llmCfg.template, llmCfg.prompts, llmCfg.timeout, llmCfg.review, llmCfg.retries, llmCfg.hint, llmCfg.special);
   $('llm-modal').style.display = 'flex';
 }
 
-function llmFill(tpl, prm, timeout, review, retries, hint) {
+function llmFill(tpl, prm, timeout, review, retries, hint, special) {
+  $('llm-special').value = special || '';
   $('llm-hint').checked = !!hint;
   $('llm-review').checked = !!review;
   $('llm-retries').value = retries;
@@ -283,7 +288,7 @@ function llmFill(tpl, prm, timeout, review, retries, hint) {
 function llmRead() {
   const template = JSON.parse($('llm-tpl').value), prompts = JSON.parse($('llm-prm').value);
   if (!template || typeof template !== 'object' || !Array.isArray(template.messages)) throw new Error('Template must be an object with a "messages" array.');
-  return { url: $('llm-url').value, template, prompts: { ...LLM_DEFAULT_PROMPTS, ...prompts }, timeout: Math.max(1, parseFloat($('llm-timeout').value) || 30), hint: $('llm-hint').checked, review: $('llm-review').checked, retries: clamp(parseInt($('llm-retries').value, 10) || 0, 0, 10) };
+  return { url: $('llm-url').value, template, prompts: { ...LLM_DEFAULT_PROMPTS, ...prompts }, timeout: Math.max(1, parseFloat($('llm-timeout').value) || 30), special: $('llm-special').value.trim(), hint: $('llm-hint').checked, review: $('llm-review').checked, retries: clamp(parseInt($('llm-retries').value, 10) || 0, 0, 10) };
 }
 
 function llmPreviewItem(cfg) {
@@ -307,7 +312,7 @@ function llmPreview() {
 function llmApply() {
   try {
     const cfg = llmRead();
-    Object.assign(llmCfg, { template: cfg.template, prompts: cfg.prompts, timeout: cfg.timeout, hint: cfg.hint, review: cfg.review, retries: cfg.retries });
+    Object.assign(llmCfg, { template: cfg.template, prompts: cfg.prompts, timeout: cfg.timeout, special: cfg.special, hint: cfg.hint, review: cfg.review, retries: cfg.retries });
     llmSave();
     $('llm-modal').style.display = 'none';
     showToast('✅ LLM settings saved.', 'info');
