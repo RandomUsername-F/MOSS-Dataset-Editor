@@ -189,7 +189,7 @@ textarea { resize: vertical; min-height: 48px; line-height: 1.35; }
 .llm-row input[type=text] { flex: 1; min-width: 140px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font-family: var(--font-mono); font-size: 0.7rem; }
 .llm-status { font-size: 0.68rem; font-family: var(--font-mono); color: var(--text-muted); margin-left: auto; }
 .llm-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: none; align-items: center; justify-content: center; }
-.llm-dialog { width: min(900px, 92vw); max-height: 90vh; overflow: auto; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.llm-dialog { width: min(900px, 92vw); max-height: 90vh; overflow: hidden; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
 .llm-dialog h3 { margin: 0 0 4px; }
 .llm-dialog label { font-size: 0.72rem; font-weight: 600; margin-top: 6px; }
 .llm-dialog textarea { width: 100%; box-sizing: border-box; resize: vertical; white-space: pre; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 6px; font-family: var(--font-mono); font-size: 0.72rem; }
@@ -213,4 +213,12 @@ label, .toolbar-label { font-size: 0.72rem; color: color-mix(in srgb, var(--text
 .ds-notice small { display: block; margin-top: 4px; font-size: 0.72rem; font-weight: 500; opacity: 0.85; }
 
 /* ---- JSON box in the header (Auto / Compile / Decompile) ---- */
+/* ---- Ultralytics detector settings ---- */
+.yolo-status { font-size: 0.8rem; font-weight: 600; line-height: 1.4; }
+.yolo-table { max-height: 58vh; min-height: 120px; overflow: auto; border: 1px solid var(--border); border-radius: 4px; }
+.yolo-table table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+.yolo-table th { text-align: left; padding: 3px 6px; position: sticky; top: 0; background: var(--bg-panel); }
+.yolo-table td:last-child { white-space: nowrap; }
+.yolo-table td { padding: 3px 6px; border-top: 1px solid var(--border); }
+.yolo-table input:not([type=checkbox]) { width: 100%; box-sizing: border-box; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 3px; padding: 2px 4px; }
 .json-box { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--text-main) 35%, var(--border)); border-radius: 6px; background: color-mix(in srgb, var(--text-main) 4%, transparent); }

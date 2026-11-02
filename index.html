@@ -150,6 +150,9 @@
             <div class="llm-row">
               <button class="btn" title="Detect boxes, then caption and tag the scene and every new box" onclick="llmFull()">✨ Boxes + Caption + Tags</button>
               <button class="btn" title="Caption and tag only existing elements that are empty" onclick="llmEmpty()">✨ Fill empty elements</button>
+              <button class="btn" title="Create boxes with the local Ultralytics detector models" onclick="yoloDetect()">🎯 Boxes (YOLO)</button>
+            </div>
+            <div class="llm-row">
               
               <input id="llm-url" type="text" spellcheck="false" title="LLM server address (OpenAI-compatible chat completions)" placeholder="http://localhost:1234/v1/chat/completions">
               <button class="btn btn-icon" title="Request settings" onclick="llmOpenSettings()">⚙️</button>
@@ -216,6 +219,7 @@
   <script src="dataset.js"></script>
   <script src="crop.js"></script>
   <script src="llm.js"></script>
+  <script src="yolo.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

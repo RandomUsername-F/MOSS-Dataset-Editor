@@ -19,6 +19,7 @@ const LLM_DEFAULT_PROMPTS = {
   palette: 'List the 5 dominant colors of this image as hex codes. Return ONLY a JSON array such as ["#aabbcc"].',
   item_caption: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to caption. Describe only what is visible on the {{label}} itself: appearance, shape, colors, materials, clothing, pose and details. Do not describe perspective, camera angle, framing, cropping, scene lighting or composition, and never use phrases such as "close-up", "cropped", "partial view" or "in the image": those belong to the scene caption, not to an element. Do not describe the surroundings or other elements. The scene caption in the context already covers the overall scene: do not copy or paraphrase its sentences, write the caption from what you see in image 2. Start directly with the subject (for example "A woman in a red coat holding an umbrella") and never mention "image", "crop", "target" or "element". Element data:\n{{target}}\nScene context, for reference only (never copy it):\n{{context}}\nOutput only the caption text.',
   item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Do not use tags about perspective, framing or camera (such as close-up). Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.',
+  image_type: 'Which single category best describes this image? Options: {{options}}. Return ONLY the option text, nothing else.',
   review: 'Review a response against the instructions it was given. You also get the same image(s). Instructions:\n"""\n{{instructions}}\n"""\nResponse:\n"""\n{{response}}\n"""\nDoes the response follow ALL of the instructions (required format, content limits, forbidden phrases and topics)? Return ONLY JSON: {"ok": true or false, "issues": "short list of the violated instructions, empty when ok"}.'
 };
 
@@ -257,7 +258,9 @@ function llmField(key) { // 'summary.caption' | 'summary.meta' | 'summary.palett
 function llmOpenSettings() {
   if (!$('llm-modal')) {
     document.body.insertAdjacentHTML('beforeend', `<div id="llm-modal" class="llm-modal"><div class="llm-dialog">
-      <h3>⚙️ LLM request settings</h3>
+      <h3>⚙️ Settings</h3>
+      <div class="llm-row"><button class="btn" id="tabbtn-llm" onclick="llmTab('llm')">LLM request</button><button class="btn" id="tabbtn-yolo" onclick="llmTab('yolo')">🎯 Ultralytics detector</button></div>
+      <div id="llm-tab-llm" style="display:flex; flex-direction:column; gap:6px;">
       <p class="llm-hint">Each request is POSTed to the server address by server.py. Template placeholders: <code>{{system}}</code> <code>{{prompt}}</code> <code>{{image}}</code> <code>{{crop}}</code> (box requests only, dropped otherwise). Prompt placeholders: <code>{{width}}</code> <code>{{height}}</code> <code>{{label}}</code> <code>{{target}}</code> <code>{{context}}</code>.</p>
       <label>Special instructions (theme of the dataset or unusual concepts the model may not recognize; added to every request)</label><textarea id="llm-special" rows="4" spellcheck="false" style="white-space:pre-wrap;" placeholder="Example: This dataset shows hand-drawn tarot cards. Name the cards by their traditional titles."></textarea>
       <label>Timeout (seconds to wait for each response)</label><input id="llm-timeout" type="number" min="1" step="1" style="width:90px;">
@@ -268,10 +271,20 @@ function llmOpenSettings() {
       <label>Preview: example requests for the scene caption and, if the image has boxes, the first box caption (image data shortened)</label>
       <textarea id="llm-prev" rows="10" readonly spellcheck="false"></textarea>
       <div class="llm-row"><button class="btn" onclick="llmPreview()">🔄 Refresh preview</button><button class="btn" onclick="llmFill(LLM_DEFAULT_TEMPLATE, LLM_DEFAULT_PROMPTS, 30, false, 2, false, '')">Reset defaults</button><span style="flex:1"></span><button class="btn" onclick="llmApply()">💾 Save</button><button class="btn" onclick="$('llm-modal').style.display='none'">Close</button></div>
+      </div>
+      <div id="llm-tab-yolo" style="display:none; flex-direction:column; gap:6px;"></div>
     </div></div>`);
   }
   llmFill(llmCfg.template, llmCfg.prompts, llmCfg.timeout, llmCfg.review, llmCfg.retries, llmCfg.hint, llmCfg.special);
   $('llm-modal').style.display = 'flex';
+  llmTab('llm');
+}
+
+function llmTab(t) { // settings popup tabs: LLM request / Ultralytics detector
+  $('llm-tab-llm').style.display = t === 'llm' ? 'flex' : 'none';
+  $('llm-tab-yolo').style.display = t === 'yolo' ? 'flex' : 'none';
+  for (const k of ['llm', 'yolo']) $(`tabbtn-${k}`).style.background = k === t ? 'var(--bg-card-hover)' : '';
+  if (t === 'yolo') yoloOpenSettings();
 }
 
 function llmFill(tpl, prm, timeout, review, retries, hint, special) {

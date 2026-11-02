@@ -2,7 +2,7 @@
 Setup: pip install flask pillow   (pillow is optional, used for cached thumbnails)
 Run:   python server.py [--port 5000]
 """
-import argparse, atexit, hashlib, json, logging, os, re, shutil, signal, subprocess, sys, threading, time
+import argparse, atexit, base64, hashlib, json, logging, os, re, shutil, signal, subprocess, sys, tempfile, threading, time
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -295,6 +295,95 @@ def llm_proxy():
         if isinstance(e, (socket.timeout, TimeoutError)) or isinstance(getattr(e, 'reason', None), (socket.timeout, TimeoutError)):
             return jsonify(error=f'The LLM did not respond within {secs:g} s. Increase the timeout in the request settings.'), 504
         return jsonify(error=f'LLM request failed: {e}'), 502
+
+
+def yolo_python(j):
+    """Python that runs Ultralytics: the venv chosen in the settings, else the one running this server."""
+    if j.get('use_venv') and str(j.get('venv', '')).strip():
+        v = os.path.expanduser(str(j['venv']).strip())
+        for c in (v, os.path.join(v, 'Scripts', 'python.exe'), os.path.join(v, 'bin', 'python')):
+            if os.path.isfile(c):
+                return c
+        raise ValueError('No python executable found in the venv folder')
+    return sys.executable
+
+
+@app.post('/api/yolo/check')
+def yolo_check():
+    j = request.get_json(silent=True) or {}
+    try:
+        py = yolo_python(j)
+        p = subprocess.run([py, '-c', 'import ultralytics; print(ultralytics.__version__)'], capture_output=True, text=True, timeout=120)
+    except Exception as e:
+        return jsonify(ok=False, error=str(e))
+    if p.returncode:
+        return jsonify(ok=False, python=py, error=(p.stderr.strip().splitlines() or ['import failed'])[-1])
+    return jsonify(ok=True, python=py, version=p.stdout.strip())
+
+
+@app.post('/api/yolo/scan')
+def yolo_scan():
+    folder = os.path.abspath(os.path.expanduser(str((request.get_json(silent=True) or {}).get('folder', ''))))
+    if not os.path.isdir(folder):
+        return jsonify(error='Folder not found'), 400
+    out = []
+    for dp, dn, fn in os.walk(folder):
+        dn[:] = [d for d in dn if not d.startswith('.')]
+        out += [os.path.relpath(os.path.join(dp, f), folder).replace('\\', '/') for f in fn if f.lower().endswith('.pt')]
+        if len(out) > 2000:
+            break
+    return jsonify(models=sorted(out, key=str.lower))
+
+
+@app.post('/api/yolo/detect')
+def yolo_detect():
+    j = request.get_json(silent=True) or {}
+    folder = os.path.realpath(os.path.expanduser(str(j.get('folder', ''))))
+    models = [os.path.realpath(os.path.join(folder, m)) for m in j.get('models', [])]
+    if not models or not all(m.startswith(folder + os.sep) and os.path.isfile(m) for m in models):
+        return jsonify(error='Model files not found in the models folder'), 400
+    try:
+        py = yolo_python(j)
+        raw = base64.b64decode(str(j.get('image', '')).split(',', 1)[-1])
+    except Exception as e:
+        return jsonify(error=str(e)), 400
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+        f.write(raw)
+    log = bool(j.get('log'))
+    if log:
+        print(f'[yolo] python: {py}\n[yolo] models: {", ".join(os.path.basename(m) for m in models)} (min confidence {j.get("conf") or 0.25})', flush=True)
+    started = time.time()
+    result, lines = None, []
+    try:
+        proc = subprocess.Popen([py, os.path.join(BASE, 'yolo_runner.py')], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, encoding='utf-8', errors='replace', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
+        killer = threading.Timer(600, proc.kill)
+        killer.daemon = True
+        killer.start()
+        proc.stdin.write(json.dumps({'image': f.name, 'models': models, 'conf': float(j.get('conf') or 0.25), 'verbose': log}))
+        proc.stdin.close()
+        for line in proc.stdout:  # live output; the result is the one JSON line
+            line = line.rstrip()
+            if line.startswith('{"boxes"'):
+                result = line
+            elif line:
+                lines.append(line)
+                if log:
+                    print('[yolo]', line, flush=True)
+        proc.wait()
+        killer.cancel()
+    except Exception as e:
+        return jsonify(error=f'Detector failed: {e}'), 500
+    finally:
+        os.remove(f.name)
+    if proc.returncode or not result:
+        if log:
+            print('[yolo] failed', flush=True)
+        return jsonify(error='Detector failed: ' + (lines[-1] if lines else 'unknown error')), 500
+    data = json.loads(result)
+    if log:
+        print(f'[yolo] {len(data["boxes"])} box(es) in {time.time() - started:.1f} s', flush=True)
+    return jsonify(data)
 
 
 def write_json(path, obj):
