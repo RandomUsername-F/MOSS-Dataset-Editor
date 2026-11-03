@@ -259,7 +259,7 @@ function llmOpenSettings() {
   if (!$('llm-modal')) {
     document.body.insertAdjacentHTML('beforeend', `<div id="llm-modal" class="llm-modal"><div class="llm-dialog">
       <h3>⚙️ Settings</h3>
-      <div class="llm-row"><button class="btn" id="tabbtn-llm" onclick="llmTab('llm')">LLM request</button><button class="btn" id="tabbtn-yolo" onclick="llmTab('yolo')">🎯 Ultralytics detector</button></div>
+      <div class="llm-row"><button class="tab-btn" id="tabbtn-llm" onclick="llmTab('llm')">LLM request</button><button class="tab-btn" id="tabbtn-yolo" onclick="llmTab('yolo')">🎯 Ultralytics detector</button></div>
       <div id="llm-tab-llm" style="display:flex; flex-direction:column; gap:6px;">
       <p class="llm-hint">Each request is POSTed to the server address by server.py. Template placeholders: <code>{{system}}</code> <code>{{prompt}}</code> <code>{{image}}</code> <code>{{crop}}</code> (box requests only, dropped otherwise). Prompt placeholders: <code>{{width}}</code> <code>{{height}}</code> <code>{{label}}</code> <code>{{target}}</code> <code>{{context}}</code>.</p>
       <label>Special instructions (theme of the dataset or unusual concepts the model may not recognize; added to every request)</label><textarea id="llm-special" rows="4" spellcheck="false" style="white-space:pre-wrap;" placeholder="Example: This dataset shows hand-drawn tarot cards. Name the cards by their traditional titles."></textarea>

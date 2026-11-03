@@ -16,10 +16,17 @@ def iou(a, b):
 
 def main():
     req = json.load(sys.stdin)
-    from ultralytics import YOLO
+    classes = req.get('classes')  # open-vocabulary models (YOLO-World) get their keywords before predicting
+    if classes:
+        from ultralytics import YOLOWorld as Model
+    else:
+        from ultralytics import YOLO as Model
     found, size = [], [0, 0]
     for path in req['models']:
-        r = YOLO(path)(req['image'], conf=req['conf'], verbose=bool(req.get('verbose')))[0]
+        model = Model(path)
+        if classes:
+            model.set_classes(classes)
+        r = model.predict(req['image'], conf=req['conf'], verbose=bool(req.get('verbose')))[0]
         size = [r.orig_shape[1], r.orig_shape[0]]
         b = r.boxes if r.boxes is not None else getattr(r, 'obb', None)
         if b is None:  # classification / depth / semantic models have no boxes

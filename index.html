@@ -151,6 +151,7 @@
               <button class="btn" title="Detect boxes, then caption and tag the scene and every new box" onclick="llmFull()">✨ Boxes + Caption + Tags</button>
               <button class="btn" title="Caption and tag only existing elements that are empty" onclick="llmEmpty()">✨ Fill empty elements</button>
               <button class="btn" title="Create boxes with the local Ultralytics detector models" onclick="yoloDetect()">🎯 Boxes (YOLO)</button>
+              <button class="btn" id="yolo-open-btn" title="Detect by keywords with an open-vocabulary model (YOLO-World)" onclick="yoloOpenPopover(this)">🔤 Keywords (YOLO)</button>
             </div>
             <div class="llm-row">
               

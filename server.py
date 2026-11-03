@@ -350,6 +350,9 @@ def yolo_detect():
     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
         f.write(raw)
     log = bool(j.get('log'))
+    classes = [str(c).strip() for c in (j.get('classes') if isinstance(j.get('classes'), list) else []) if str(c).strip()]
+    if log and classes:
+        print(f'[yolo] keywords: {", ".join(classes)}', flush=True)
     if log:
         print(f'[yolo] python: {py}\n[yolo] models: {", ".join(os.path.basename(m) for m in models)} (min confidence {j.get("conf") or 0.25})', flush=True)
     started = time.time()
@@ -360,7 +363,7 @@ def yolo_detect():
         killer = threading.Timer(600, proc.kill)
         killer.daemon = True
         killer.start()
-        proc.stdin.write(json.dumps({'image': f.name, 'models': models, 'conf': float(j.get('conf') or 0.25), 'verbose': log}))
+        proc.stdin.write(json.dumps({'image': f.name, 'models': models, 'conf': float(j.get('conf') or 0.25), 'classes': classes, 'verbose': log}))
         proc.stdin.close()
         for line in proc.stdout:  # live output; the result is the one JSON line
             line = line.rstrip()
