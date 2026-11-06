@@ -74,6 +74,7 @@ function switchTab(tab) {
     document.querySelectorAll('.tab-btn')[i].classList.toggle('active', t === tab);
   });
   if (tab === 'json') syncJson();
+  if (tab === 'items') growTextareas();
 }
 
 function setupKeyboardShortcuts() {

@@ -16,7 +16,13 @@ const dsQuery = i => `v=${ds.version}&i=${i}`;
 const dsStatus = t => { $('ds-status').textContent = t; };
 // The editor canvas uses the exact image size, but a saved layout must use multiples of 16 (MOSS-Image Layout rule).
 const dsRound16 = v => Math.max(16, Math.round(v / 16) * 16);
-const dsDraft = () => ({ ...sceneData, width: dsRound16(sceneData.width), height: dsRound16(sceneData.height) });
+const dsDraft = () => { // saved layout: canvas rounded to 16, boxes kept inside it
+  const W = dsRound16(sceneData.width), H = dsRound16(sceneData.height);
+  // An image whose size is not a multiple of 16 can be larger than its rounded canvas (e.g. 1010 -> 1008): a box touching the edge
+  // would then be "outside the canvas". Clamp such boxes to the saved canvas.
+  const items = sceneData.items.map(it => ({ ...it, bbox: [clamp(it.bbox[0], 0, W), clamp(it.bbox[1], 0, H), clamp(it.bbox[2], 0, W), clamp(it.bbox[3], 0, H)] }));
+  return { ...sceneData, width: W, height: H, items };
+};
 const dsSerialize = () => { // compiled when Auto is on or the file is already compiled (it never decompiles by itself), else the draft
   const draft = dsDraft();
   ds.fallback = '';

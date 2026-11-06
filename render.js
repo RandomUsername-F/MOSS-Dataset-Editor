@@ -50,7 +50,13 @@ function renderAll() {
 
   if (selectedIndices.size) renderActiveHandlesLayer();
   syncJson();
+  growTextareas();
 }
+
+/* Caption / text boxes grow to fit their content (also when an LLM fills them). Hidden ones are measured when shown. */
+const autoGrow = el => { if (el.offsetParent === null) return; el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px`; };
+const growTextareas = () => document.querySelectorAll('#items-list textarea, #sum-caption').forEach(autoGrow);
+document.addEventListener('input', e => { if (e.target.matches?.('#items-list textarea, #sum-caption')) autoGrow(e.target); });
 
 /* Cheap in-place update of one box while dragging / editing (no full re-render). */
 function updateSelectedElementView(idx) {
