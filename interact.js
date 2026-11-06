@@ -174,7 +174,7 @@ function changeItemLabel(idx, newLabel) {
   recordState();
   item.label = newLabel;
   if (newLabel !== 'text') delete item.text;
-  else if (item.text === undefined) item.text = item.caption || 'SAMPLE TEXT';
+  else if (item.text === undefined) item.text = item.caption || '';
   renderAll();
 }
 

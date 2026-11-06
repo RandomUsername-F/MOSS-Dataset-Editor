@@ -1,6 +1,6 @@
 /* Dataset mode: folder loading through server.py, virtualised image list, per-image JSON autosave. */
 
-const ds = { active: false, count: 0, total: 0, pos: -1, gen: 0, filtered: false, version: 0, index: -1, token: 0, bust: new Map(), items: new Map(), chunks: new Map(),
+const ds = { active: false, count: 0, total: 0, pos: -1, gen: 0, filtered: false, version: 0, index: -1, token: 0, sel: new Set(), bust: new Map(), items: new Map(), chunks: new Map(),
   loading: false, readOnly: false, exactDims: false, lastSaved: '', pending: null, timer: null, saving: Promise.resolve() };
 const DS_ROW = 44, DS_CHUNK = 200;
 const dsRows = new Map();
@@ -95,7 +95,7 @@ function dsDecompileNow() { // manual only: write this image's JSON back as the 
   flushSave();
   dsNotice($('ds-compiled').checked ? 'Decompiled. Auto is on, so the next edit compiles it again.' : 'Decompiled to the editable draft.', 'ok');
 }
-const dsInfo = () => { $('ds-info').textContent = ds.filtered ? `${ds.count} / ${ds.total} images` : `${ds.total} images`; };
+const dsInfo = () => { $('ds-info').textContent = (ds.filtered ? `${ds.count} / ${ds.total} images` : `${ds.total} images`) + (ds.sel.size ? ` · ${ds.sel.size} selected` : ''); };
 
 /* ---- Loading ---- */
 async function loadDataset() {
@@ -111,7 +111,7 @@ async function loadDataset() {
     if (info.truncated) showToast(`⚠️ Scan capped at ${info.count} images.`, 'warn');
     dsRows.forEach(el => el.remove());
     dsRows.clear();
-    Object.assign(ds, { active: true, count: info.count, total: info.count, pos: -1, gen: ds.gen + 1, filtered: false, version: info.version, index: -1, bust: new Map(), items: new Map(), chunks: new Map(), pending: null });
+    Object.assign(ds, { active: true, count: info.count, total: info.count, pos: -1, gen: ds.gen + 1, filtered: false, version: info.version, index: -1, sel: new Set(), bust: new Map(), items: new Map(), chunks: new Map(), pending: null });
     $('ds-search').value = '';
     dsLastQuery = '';
     $('ds-sidebar').style.display = 'flex';
@@ -165,10 +165,10 @@ function dsRender() {
     if (dsRows.has(i)) continue;
     const it = ds.items.get(i);
     if (!it) { dsFetch(Math.floor(i / DS_CHUNK)); continue; }
-    const el = Object.assign(document.createElement('div'), { className: `ds-row${it.i === ds.index ? ' active' : ''}` });
+    const el = Object.assign(document.createElement('div'), { className: `ds-row${it.i === ds.index ? ' active' : ''}${ds.sel.has(it.i) ? ' selected' : ''}` });
     el.style.top = `${i * DS_ROW}px`;
     el.innerHTML = `<img loading="lazy" alt="" src="/api/thumb?${dsQuery(it.i)}&t=${ds.bust.get(it.i) || 0}"><span title="${escapeHtml(it.rel)}">${escapeHtml(it.name)}</span>`;
-    el.onclick = () => selectDatasetImage(it.i, i);
+    el.onclick = e => dsRowClick(e, it.i, i);
     box.appendChild(el);
     dsRows.set(i, el);
   }
@@ -183,6 +183,30 @@ function dsWarnDims(W, H, toast = false) {
 }
 
 /* ---- Selecting an image ---- */
+const dsMarkSel = () => { // refresh the selection highlight and counter
+  dsRows.forEach((el, r) => el.classList.toggle('selected', ds.sel.has(ds.items.get(r)?.i)));
+  dsInfo();
+};
+
+async function dsRowClick(e, i, r) { // click: open | Ctrl+click: add or remove | Shift+click: range from the open image
+  if (macro.running) return showToast('⚠️ A macro is running. Interrupt it first.', 'warn');
+  if (e.ctrlKey || e.metaKey) {
+    if (!ds.sel.size && ds.index >= 0) ds.sel.add(ds.index); // the open image counts as selected
+    if (ds.sel.has(i)) ds.sel.delete(i); else ds.sel.add(i);
+    return dsMarkSel();
+  }
+  if (e.shiftKey && ds.pos >= 0) {
+    const a = Math.min(ds.pos, r), b = Math.max(ds.pos, r);
+    for (let c = Math.floor(a / DS_CHUNK); c <= Math.floor(b / DS_CHUNK); c++) await dsFetch(c);
+    ds.sel = new Set();
+    for (let k = a; k <= b; k++) { const it = ds.items.get(k); if (it) ds.sel.add(it.i); }
+    return dsMarkSel();
+  }
+  ds.sel.clear();
+  dsMarkSel();
+  selectDatasetImage(i, r);
+}
+
 async function selectDatasetImage(i, pos) {
   if (!ds.active || i < 0 || i >= ds.total || i === ds.index) return;
   await flushSave();
@@ -240,7 +264,7 @@ async function selectDatasetImage(i, pos) {
 
 /* ---- Page Up / Page Down (not while typing) or Ctrl+Up / Ctrl+Down (always): previous / next image ---- */
 window.addEventListener('keydown', async e => {
-  if (!ds.active) return;
+  if (!ds.active || macro.running) return;
   const ctrlNav = e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown');
   const pageNav = (e.key === 'PageUp' || e.key === 'PageDown') && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if (!ctrlNav && !pageNav) return;

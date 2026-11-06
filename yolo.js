@@ -39,10 +39,10 @@ async function yoloKind(img, alive, open) { // image type (photo / illustration)
 }
 
 /* ---- Detection ---- */
-const yoloDetect = (classes) => llmRun(async (img, alive) => { // classes: keywords for an open-vocabulary run
+const yoloDetectCore = async (img, alive, classes, ask = true) => { // classes: keywords for an open-vocabulary run; ask: confirm when boxes exist
   if (!yoloCfg.folder) throw new Error('Set the models folder in the YOLO settings first.');
   if (!yoloFiles.length) await yoloScan();
-  if (sceneData.items.length && !confirm(`This image already has ${sceneData.items.length} box(es). Detect and add more boxes?`)) return llmStatus('');
+  if (ask && sceneData.items.length && !confirm(`This image already has ${sceneData.items.length} box(es). Detect and add more boxes?`)) return llmStatus('');
   llmStatus('⏳ Choosing detector models…');
   const open = !!classes;
   const kind = await yoloKind(img, alive, open);
@@ -68,7 +68,9 @@ const yoloDetect = (classes) => llmRun(async (img, alive) => { // classes: keywo
   if (!made.length) throw new Error('The detector found nothing.');
   llmSet(() => sceneData.items.push(...made));
   llmStatus(`✔ ${made.length} box(es) from ${models.length} model(s)`);
-});
+};
+
+const yoloDetect = classes => llmRun((img, alive) => yoloDetectCore(img, alive, classes));
 
 const yoloKeywords = s => [...new Set(s.split(',').map(x => x.trim()).filter(Boolean))]; // "a mug, a laptop" -> ["a mug", "a laptop"]
 

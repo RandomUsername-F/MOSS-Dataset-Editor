@@ -53,8 +53,8 @@ function renderAll() {
   growTextareas();
 }
 
-/* Caption / text boxes grow to fit their content (also when an LLM fills them). Hidden ones are measured when shown. */
-const autoGrow = el => { if (el.offsetParent === null) return; el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px`; };
+/* Caption / text boxes grow to fit their content (also when an LLM fills them) but never shrink, so a manual resize is kept. Hidden ones are measured when shown. */
+const autoGrow = el => { if (el.offsetParent !== null && el.scrollHeight > el.clientHeight) el.style.height = `${el.scrollHeight + 2}px`; };
 const growTextareas = () => document.querySelectorAll('#items-list textarea, #sum-caption').forEach(autoGrow);
 document.addEventListener('input', e => { if (e.target.matches?.('#items-list textarea, #sum-caption')) autoGrow(e.target); });
 
@@ -173,7 +173,7 @@ function renderSidebarList() {
           <div class="form-group"><label>Bounds (Coordinates)</label>${coordRows}</div>
           ${item.label === 'text' ? `
           <div class="form-group">
-            <label>text (Literal Rendered String — Multiline Supported)</label>
+            <div class="field-header"><label>text (Literal Rendered String — Multiline Supported)</label>${locked ? '' : `<span class="tag-edit-cue" title="Ask the LLM to read the text from the box (overwrites)" onclick="llmField('item.${idx}.text')">✨ Auto</span>`}</div>
             <textarea rows="2" class="textarea-literal-text" placeholder="Exact wording..." ${dis} oninput="updateItemField(${idx}, 'text', this.value)">${escapeHtml(item.text || '')}</textarea>
           </div>` : ''}
           <div class="form-group">

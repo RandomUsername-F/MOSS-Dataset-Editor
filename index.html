@@ -148,7 +148,8 @@
           <div class="summary-header"><span style="display:flex; align-items:center;"><span class="summary-title">🤖 LLM Auto-Caption</span><span id="llm-spinner" class="llm-spinner" style="display:none;" title="Waiting for the LLM response"></span></span><span id="llm-status" class="llm-status"></span></div>
           <div class="form-body">
             <div class="llm-row">
-              <button class="btn" title="Detect boxes, then caption and tag the scene and every new box" onclick="llmFull()">✨ Boxes + Caption + Tags</button>
+              <button class="btn" id="macro-play" title="Run the macro on the open image, or one after another on all selected images (Ctrl+click / Shift+click in the image list)" onclick="macroRun()">▶</button>
+              <button class="btn" title="Macro configuration: which actions run, and in which order" onclick="macroOpenSettings()">⚙ Macro</button>
               <button class="btn" title="Caption and tag only existing elements that are empty" onclick="llmEmpty()">✨ Fill empty elements</button>
               <button class="btn" title="Create boxes with the local Ultralytics detector models" onclick="yoloDetect()">🎯 Boxes (YOLO)</button>
               <button class="btn" id="yolo-open-btn" title="Detect by keywords with an open-vocabulary model (YOLO-World)" onclick="yoloOpenPopover(this)">🔤 Keywords (YOLO)</button>
@@ -221,6 +222,7 @@
   <script src="crop.js"></script>
   <script src="llm.js"></script>
   <script src="yolo.js"></script>
+  <script src="macro.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

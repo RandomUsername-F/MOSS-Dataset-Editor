@@ -19,6 +19,7 @@ const LLM_DEFAULT_PROMPTS = {
   palette: 'List the 5 dominant colors of this image as hex codes. Return ONLY a JSON array such as ["#aabbcc"].',
   item_caption: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to caption. Describe only what is visible on the {{label}} itself: appearance, shape, colors, materials, clothing, pose and details. Do not describe perspective, camera angle, framing, cropping, scene lighting or composition, and never use phrases such as "close-up", "cropped", "partial view" or "in the image": those belong to the scene caption, not to an element. Do not describe the surroundings or other elements. The scene caption in the context already covers the overall scene: do not copy or paraphrase its sentences, write the caption from what you see in image 2. Start directly with the subject (for example "A woman in a red coat holding an umbrella") and never mention "image", "crop", "target" or "element". Element data:\n{{target}}\nScene context, for reference only (never copy it):\n{{context}}\nOutput only the caption text.',
   item_tags: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE {{label}} cut from that scene, and it is the only thing to tag. List 3-8 short descriptive tags for what is visible inside image 2 only, ignoring the surroundings and other elements. Do not use tags about perspective, framing or camera (such as close-up). Element data:\n{{target}}\nScene context, for reference only:\n{{context}}\nReturn ONLY a JSON array of strings.',
+  item_text: 'You get two images. Image 1 is the full scene, given only as context. Image 2 is a crop of ONE text element cut from that scene. Transcribe exactly the characters visible in image 2, in reading order, keeping the original language, spelling and punctuation, with each line of text on its own line. Return ONLY the transcribed text, nothing else.',
   image_type: 'Which single category best describes this image? Options: {{options}}. Return ONLY the option text, nothing else.',
   review: 'Review a response against the instructions it was given. You also get the same image(s). Instructions:\n"""\n{{instructions}}\n"""\nResponse:\n"""\n{{response}}\n"""\nDoes the response follow ALL of the instructions (required format, content limits, forbidden phrases and topics)? Return ONLY JSON: {"ok": true or false, "issues": "short list of the violated instructions, empty when ok"}.'
 };
@@ -51,6 +52,9 @@ function llmPrompt(task, vars, cfg = llmCfg) { // the exact prompt text of a tas
   const p = cfg.prompts[task], extra = [];
   const text = fillText(p, { width: sceneData.width, height: sceneData.height, special: cfg.special || '', ...vars });
   if (task !== 'review' && cfg.special?.trim() && !p.includes('{{special}}')) extra.push(`Special instructions from the user about this dataset (always follow them):\n${cfg.special.trim()}`);
+  if (vars.text !== undefined && !p.includes('{{text}}')) extra.push(vars.text // text elements: the literal rendered string is always passed
+    ? `This element is a text element. The exact string it renders is ${JSON.stringify(vars.text)}. Take it into account and never alter, translate or rewrite it; describe its typography and surface treatment (font style, weight, color, size, spacing, effects), not what it says.`
+    : 'This element is a text element, but its literal string is not set yet.');
   if (vars.hint && !p.includes('{{hint}}')) extra.push(vars.hint);
   return [text, ...extra].join('\n\n');
 }
@@ -171,16 +175,23 @@ async function llmPalette(img, alive) {
   if (!hex.length) throw new Error('The LLM returned no valid hex colors.');
   llmSet(() => { sceneData.summary.palette = hex.map(h => `${getClosestColorName(h)} ${h}`); });
 }
+const llmText = it => (it.label === 'text' ? (it.text || '') : undefined); // literal string of a text element
 const llmTarget = it => JSON.stringify((({ caption, tags, bbox, ...rest }) => rest)(llmElem(it)));
 async function llmItemCaption(it, img, alive) {
-  const t = llmStripLead(await llmAsk('item_caption', { label: it.label, target: llmTarget(it), context: llmContext(it), hint: llmHint('tags of this element', it.tags) }, img, llmCrop(it, img)));
+  const t = llmStripLead(await llmAsk('item_caption', { label: it.label, text: llmText(it), target: llmTarget(it), context: llmContext(it), hint: llmHint('tags of this element', it.tags) }, img, llmCrop(it, img)));
   alive();
   if (sceneData.items.includes(it)) llmSet(() => { it.caption = t; });
 }
 async function llmItemTags(it, img, alive) {
-  const list = llmList(await llmAsk('item_tags', { label: it.label, target: llmTarget(it), context: llmContext(it), hint: llmHint('caption of this element', it.caption) }, img, llmCrop(it, img)));
+  const list = llmList(await llmAsk('item_tags', { label: it.label, text: llmText(it), target: llmTarget(it), context: llmContext(it), hint: llmHint('caption of this element', it.caption) }, img, llmCrop(it, img)));
   alive();
   if (sceneData.items.includes(it)) llmSet(() => { it.tags = list; });
+}
+
+async function llmItemText(it, img, alive) { // reads the literal string of a text element from its crop
+  const t = await llmAsk('item_text', { label: it.label }, img, llmCrop(it, img));
+  alive();
+  if (sceneData.items.includes(it)) llmSet(() => { it.text = t; });
 }
 
 async function llmDetect(img, alive) {
@@ -249,7 +260,7 @@ function llmField(key) { // 'summary.caption' | 'summary.meta' | 'summary.palett
   if (scope === 'item' && (!it || it.locked)) return;
   llmStatus(`⏳ ${key}…`);
   return llmRun((img, alive) => {
-    if (it) return b === 'caption' ? llmItemCaption(it, img, alive) : llmItemTags(it, img, alive);
+    if (it) return (b === 'caption' ? llmItemCaption : b === 'text' ? llmItemText : llmItemTags)(it, img, alive);
     return { caption: llmSummaryCaption, meta: llmSummaryTags, palette: llmPalette }[a](img, alive);
   });
 }
@@ -307,7 +318,7 @@ function llmRead() {
 function llmPreviewItem(cfg) {
   const it = sceneData.items[0];
   if (!it) return '';
-  const body = llmBody('item_caption', { label: it.label, target: llmTarget(it), context: llmContext(it), hint: llmHint('tags of this element', it.tags) }, 'data:image/jpeg;base64,<full image data>', cfg, 'data:image/jpeg;base64,<crop data>');
+  const body = llmBody('item_caption', { label: it.label, text: llmText(it), target: llmTarget(it), context: llmContext(it), hint: llmHint('tags of this element', it.tags) }, 'data:image/jpeg;base64,<full image data>', cfg, 'data:image/jpeg;base64,<crop data>');
   return `\n\n----- element caption (first box) -----\n${JSON.stringify(body, null, 2)}`;
 }
 
