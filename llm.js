@@ -245,10 +245,12 @@ const llmFull = () => llmRun(async (img, alive) => {
 });
 
 const llmEmpty = () => llmRun(async (img, alive) => {
-  const todo = sceneData.items.filter(it => !it.locked && (!it.caption?.trim() || !it.tags?.length));
-  if (!todo.length) return llmStatus('Nothing to fill: every unlocked element has a caption and tags.');
+  const needText = it => it.label === 'text' && !it.text?.trim(); // the literal rendered string of text boxes
+  const todo = sceneData.items.filter(it => !it.locked && (needText(it) || !it.caption?.trim() || !it.tags?.length));
+  if (!todo.length) return llmStatus('Nothing to fill: every unlocked element has its text, caption and tags.');
   for (const [k, it] of todo.entries()) {
     llmStatus(`⏳ Element ${k + 1}/${todo.length}…`);
+    if (needText(it)) await llmItemText(it, img, alive); // first, so the caption and tags already know the string
     if (!it.caption?.trim()) await llmItemCaption(it, img, alive);
     if (!it.tags?.length) await llmItemTags(it, img, alive);
   }

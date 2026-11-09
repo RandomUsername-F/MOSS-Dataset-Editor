@@ -61,7 +61,9 @@ const yoloDetectCore = async (img, alive, classes, ask = true) => { // classes: 
   for (const d of r.boxes) {
     const [a, b, c, e] = d.bbox, bbox = [clamp(Math.round(a * sx), 0, W), clamp(Math.round(b * sy), 0, H), clamp(Math.round(c * sx), 0, W), clamp(Math.round(e * sy), 0, H)];
     if (bbox[2] - bbox[0] < 2 || bbox[3] - bbox[1] < 2) continue;
-    const it = { label: d.label === 'person' ? 'character' : 'object', caption: '', bbox, tags: [d.label] }; // the YOLO class becomes the first tag
+    const it = yoloM(models[d.mi]).text // boxes from models marked 🔠 Text become text boxes (the string is filled later, e.g. by Box text OCR)
+      ? { label: 'text', caption: '', text: '', bbox, tags: [] }
+      : { label: d.label === 'person' ? 'character' : 'object', caption: '', bbox, tags: [d.label] }; // the YOLO class becomes the first tag
     attachEditorProperties(it);
     made.push(it);
   }
@@ -130,6 +132,7 @@ function yoloBuild() {
       if (k === 'active') m.active = t.checked;
       else if (k === 'group') m.group = t.value.trim();
       else if (k === 'open') m.open = t.checked;
+      else if (k === 'text') m.text = t.checked;
       else { m.tags = m.tags.filter(x => x !== k); if (t.checked) m.tags.push(k); } // k is 'photo' or 'illustration'
       yoloSave();
       if (k === 'group') yoloRenderModels();
@@ -198,6 +201,6 @@ function yoloRenderModels() {
   $('yolo-groups').innerHTML = groups.map(g => `<label class="btn" style="margin:0;" title="Deactivate or activate the whole group"><input type="checkbox" data-group="${esc(g)}" ${yoloCfg.groups[g]?.active === false ? '' : 'checked'}> ${esc(g)}</label>`).join('')
     || '<span class="llm-hint">No groups yet: type a group name next to a model.</span>';
   $('yolo-models').innerHTML = yoloRows.length
-    ? `<table><tr><th>On</th><th>Model</th><th>Group</th><th>Type</th></tr>${yoloRows.map((f, i) => { const m = yoloM(f); return `<tr><td><input type="checkbox" data-i="${i}" data-k="active" ${m.active ? 'checked' : ''}></td><td title="${esc(f)}">${esc(f)}</td><td><input list="yolo-gl" data-i="${i}" data-k="group" value="${esc(m.group)}" placeholder="group"></td><td><label class="btn" style="margin:0;"><input type="checkbox" data-i="${i}" data-k="photo" ${m.tags.includes('photo') ? 'checked' : ''}> 📷 Photo</label> <label class="btn" style="margin:0;"><input type="checkbox" data-i="${i}" data-k="illustration" ${m.tags.includes('illustration') ? 'checked' : ''}> 🎨 Illustration</label> <label class="btn" style="margin:0;" title="Open-vocabulary (YOLO-World): skipped by Boxes (YOLO), runs from Keywords (YOLO) with the keywords you enter"><input type="checkbox" data-i="${i}" data-k="open" ${m.open ? 'checked' : ''}> 🔤 Open-vocab</label></td></tr>`; }).join('')}</table>`
+    ? `<table><tr><th>On</th><th>Model</th><th>Group</th><th>Type</th></tr>${yoloRows.map((f, i) => { const m = yoloM(f); return `<tr><td><input type="checkbox" data-i="${i}" data-k="active" ${m.active ? 'checked' : ''}></td><td title="${esc(f)}">${esc(f)}</td><td><input list="yolo-gl" data-i="${i}" data-k="group" value="${esc(m.group)}" placeholder="group"></td><td><label class="btn" style="margin:0;"><input type="checkbox" data-i="${i}" data-k="photo" ${m.tags.includes('photo') ? 'checked' : ''}> 📷 Photo</label> <label class="btn" style="margin:0;"><input type="checkbox" data-i="${i}" data-k="illustration" ${m.tags.includes('illustration') ? 'checked' : ''}> 🎨 Illustration</label> <label class="btn" style="margin:0;" title="Open-vocabulary (YOLO-World): skipped by Boxes (YOLO), runs from Keywords (YOLO) with the keywords you enter"><input type="checkbox" data-i="${i}" data-k="open" ${m.open ? 'checked' : ''}> 🔤 Open-vocab</label> <label class="btn" style="margin:0;" title="Boxes from this model are created as text boxes"><input type="checkbox" data-i="${i}" data-k="text" ${m.text ? 'checked' : ''}> 🔠 Text</label></td></tr>`; }).join('')}</table>`
     : '<span class="llm-hint" style="padding:8px;display:block;">No .pt models found. Set the models folder above.</span>';
 }

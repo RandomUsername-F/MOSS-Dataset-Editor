@@ -22,7 +22,7 @@ def main():
     else:
         from ultralytics import YOLO as Model
     found, size = [], [0, 0]
-    for path in req['models']:
+    for mi, path in enumerate(req['models']):
         model = Model(path)
         if classes:
             model.set_classes(classes)
@@ -33,7 +33,7 @@ def main():
             continue
         name = path.replace('\\', '/').split('/')[-1]
         for xy, c, k in zip(b.xyxy.tolist(), b.conf.tolist(), b.cls.tolist()):
-            found.append({'label': r.names[int(k)], 'conf': round(c, 4), 'bbox': [round(v, 1) for v in xy], 'model': name})
+            found.append({'label': r.names[int(k)], 'conf': round(c, 4), 'bbox': [round(v, 1) for v in xy], 'model': name, 'mi': mi})
     found.sort(key=lambda d: -d['conf'])
     keep = []
     for d in found:  # the same object from several models is kept once (highest confidence)
