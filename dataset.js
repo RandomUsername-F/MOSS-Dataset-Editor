@@ -113,6 +113,7 @@ async function loadDataset() {
     dsRows.clear();
     Object.assign(ds, { active: true, count: info.count, total: info.count, pos: -1, gen: ds.gen + 1, filtered: false, version: info.version, index: -1, sel: new Set(), bust: new Map(), items: new Map(), chunks: new Map(), pending: null });
     $('ds-search').value = '';
+    $('ds-invert').checked = false;
     dsLastQuery = '';
     $('ds-sidebar').style.display = 'flex';
     $('ds-apply-meta').style.display = '';
@@ -285,16 +286,17 @@ window.addEventListener('keydown', async e => {
 let dsLastQuery = '';
 $('ds-search').addEventListener('keydown', e => { if (e.key === 'Enter') applyDsSearch(true); }); // Enter always re-runs
 $('ds-search').addEventListener('blur', () => applyDsSearch(false)); // losing focus runs it only if the text changed
+$('ds-invert').addEventListener('change', () => applyDsSearch(false)); // the Not toggle applies at once
 
 async function applyDsSearch(force) {
   if (!ds.active) return;
-  const q = $('ds-search').value;
-  if (!force && q === dsLastQuery) return;
-  dsLastQuery = q;
+  const q = $('ds-search').value, inv = $('ds-invert').checked;
+  if (!force && `${inv}|${q}` === dsLastQuery) return;
+  dsLastQuery = `${inv}|${q}`;
   const mine = ++ds.gen;
   try {
     await flushSave();
-    const r = await api('/api/search', jsonOpts('POST', JSON.stringify({ v: ds.version, q, current: ds.index })));
+    const r = await api('/api/search', jsonOpts('POST', JSON.stringify({ v: ds.version, q, invert: inv, current: ds.index })));
     if (mine !== ds.gen) return;
     Object.assign(ds, { count: r.count, total: r.total, pos: r.pos, filtered: r.filtered, gen: ds.gen + 1, items: new Map(), chunks: new Map() });
     dsRows.forEach(el => el.remove());

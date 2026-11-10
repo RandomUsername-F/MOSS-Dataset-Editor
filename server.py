@@ -150,8 +150,9 @@ def search_text(img):
 def search():
     j = request.get_json(silent=True) or {}
     q = str(j.get('q', '')).strip()
-    neg = q.startswith('-')
-    term = (q[1:] if neg else q).strip().lower()
+    dash = q.startswith('-')
+    term = (q[1:] if dash else q).strip().lower()
+    neg = dash != bool(j.get('invert'))  # a leading - and the Not toggle both invert (together they cancel out)
     with lock:
         files, root, ver = D['files'], D['root'], D['version']
     if j.get('v') != ver:

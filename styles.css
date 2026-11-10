@@ -228,6 +228,9 @@ label, .toolbar-label { font-size: 0.72rem; color: color-mix(in srgb, var(--text
 .ds-row.selected { background: rgba(56,189,248,0.22); outline: 1px solid #38bdf8; outline-offset: -1px; }
 .macro-stop { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 9500; padding: 10px 22px; border: 2px solid #fecaca; border-radius: 999px; background: #b91c1c; color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,0.55); }
 .macro-stop:hover { background: #dc2626; }
+.ds-searchrow { display: flex; align-items: center; gap: 6px; margin: 6px; }
+.ds-searchrow .ds-search { margin: 0; flex: 1; min-width: 0; }
+.ds-invert { display: flex; align-items: center; gap: 3px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .macro-step { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
 .macro-step select, .macro-step input[type=text] { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; padding: 3px 5px; font-size: 0.75rem; }
 .macro-step input[type=text] { min-width: 160px; }
